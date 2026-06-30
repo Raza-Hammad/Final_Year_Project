@@ -66,7 +66,7 @@ export const Login: React.FC = () => {
         
         {/* Logo/Identity Section */}
         <div className="flex flex-col items-center gap-2.5 text-center">
-          <div className="p-3 bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-[var(--border-subtle)] rounded-2xl shadow-xl shadow-amber-500/5">
+          <div className="p-3 bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-[var(--border-subtle)] rounded-[var(--radius-md)] shadow-xl shadow-amber-500/5">
             <Shield className="w-7 h-7 text-[var(--accent-amber)] animate-pulse" />
           </div>
           <div>

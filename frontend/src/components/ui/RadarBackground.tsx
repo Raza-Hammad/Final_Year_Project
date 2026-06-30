@@ -1,10 +1,21 @@
 import React from 'react';
 
-export const RadarBackground: React.FC = () => {
+interface RadarBackgroundProps {
+  absolute?: boolean;
+  className?: string;
+  opacity?: number;
+}
+
+export const RadarBackground: React.FC<RadarBackgroundProps> = ({ absolute = false, className = '', opacity }) => {
+  const containerClass = absolute 
+    ? `absolute inset-0 pointer-events-none select-none z-0 overflow-hidden` 
+    : `fixed inset-0 pointer-events-none select-none z-0 overflow-hidden bg-[var(--bg-base)]`;
+
   return (
-    <div className="fixed inset-0 pointer-events-none select-none z-0 overflow-hidden bg-[var(--bg-base)]">
+    <div className={`${containerClass} ${className}`}>
       <svg 
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[95vw] max-w-[850px] max-h-[850px] opacity-[0.035] text-[var(--accent-amber)]"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[95vw] max-w-[850px] max-h-[850px] text-[var(--accent-amber)]"
+        style={{ opacity: opacity !== undefined ? opacity : (absolute ? 0.05 : 0.035) }}
         viewBox="0 0 200 200" 
         fill="none" 
         stroke="currentColor" 

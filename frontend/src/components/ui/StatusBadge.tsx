@@ -14,13 +14,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
     dot: 'bg-slate-400'
   };
 
-  if (statusUpper === 'CRITICAL') {
+  if (statusUpper === 'CRITICAL' || statusUpper === 'UNDER ATTACK') {
     badgeStyle = {
       color: 'var(--color-critical)',
       bg: 'rgba(239, 68, 68, 0.12)',
       dot: 'bg-red-500 animate-pulse'
     };
-  } else if (statusUpper === 'HIGH') {
+  } else if (statusUpper === 'HIGH' || statusUpper === 'ELEVATED' || statusUpper === 'ELEVATED RISK') {
     badgeStyle = {
       color: 'var(--color-high)',
       bg: 'rgba(249, 115, 22, 0.12)',
@@ -43,6 +43,18 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
       color: 'var(--color-calm)',
       bg: 'rgba(45, 212, 191, 0.12)',
       dot: 'bg-teal-400 animate-pulse'
+    };
+  } else if (statusUpper === 'GEMINI' || statusUpper === 'AI GEMINI') {
+    badgeStyle = {
+      color: 'var(--accent-amber)',
+      bg: 'rgba(245, 166, 35, 0.12)',
+      dot: 'bg-[var(--accent-amber)] animate-pulse'
+    };
+  } else if (statusUpper === 'RULE-BASED' || statusUpper === 'RULE') {
+    badgeStyle = {
+      color: 'var(--color-calm)',
+      bg: 'rgba(45, 212, 191, 0.12)',
+      dot: 'bg-teal-400'
     };
   }
 
