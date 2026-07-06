@@ -1,21 +1,15 @@
 import React from 'react';
 
 interface RadarBackgroundProps {
-  absolute?: boolean;
   className?: string;
-  opacity?: number;
+  isFixed?: boolean;
 }
 
-export const RadarBackground: React.FC<RadarBackgroundProps> = ({ absolute = false, className = '', opacity }) => {
-  const containerClass = absolute 
-    ? `absolute inset-0 pointer-events-none select-none z-0 overflow-hidden` 
-    : `fixed inset-0 pointer-events-none select-none z-0 overflow-hidden bg-[var(--bg-base)]`;
-
+export const RadarBackground: React.FC<RadarBackgroundProps> = ({ className = '', isFixed = true }) => {
   return (
-    <div className={`${containerClass} ${className}`}>
+    <div className={isFixed ? `fixed inset-0 pointer-events-none select-none z-0 overflow-hidden bg-[var(--bg-base)] ${className}` : `absolute inset-0 pointer-events-none select-none z-0 overflow-hidden ${className}`}>
       <svg 
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[95vw] max-w-[850px] max-h-[850px] text-[var(--accent-amber)]"
-        style={{ opacity: opacity !== undefined ? opacity : (absolute ? 0.05 : 0.035) }}
+        className={isFixed ? "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[95vw] max-w-[850px] max-h-[850px] opacity-[0.035] text-[var(--accent-amber)]" : "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[180%] h-[180%] opacity-[0.025] text-[var(--accent-amber)]"}
         viewBox="0 0 200 200" 
         fill="none" 
         stroke="currentColor" 

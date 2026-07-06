@@ -136,16 +136,22 @@ export const Dashboard: React.FC = () => {
   const [liveTiers, setLiveTiers] = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0 });
   const [attackCounts, setAttackCounts] = useState<Record<string, number>>({});
   const [activeVectors, setActiveVectors] = useState<any[]>([]);
+  const [hoveredVector, setHoveredVector] = useState<any | null>(null);
 
-  // Prune map vectors after 1.5 seconds to clean up visual threat lines
+  // Prune map vectors after 1.8 seconds using a creation timestamp filter, capping visible count at 6
   useEffect(() => {
-    if (activeVectors.length > 0) {
-      const timer = setTimeout(() => {
-        setActiveVectors((prev) => prev.slice(1));
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [activeVectors]);
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setActiveVectors((prev) => {
+        const filtered = prev.filter((v) => now - v.createdAt < 1800);
+        if (filtered.length > 6) {
+          return filtered.slice(-6);
+        }
+        return filtered;
+      });
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
 
   // 1-second interval to compute active packets per second
   useEffect(() => {
@@ -194,16 +200,17 @@ export const Dashboard: React.FC = () => {
   const [loadingExplanation, setLoadingExplanation] = useState<boolean>(false);
 
   // --- AI CHATBOT STATES ---
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; time: string; source?: string }[]>([
-    {
-      role: 'assistant',
-      text: "Welcome to the ThreatSim SOC Assistant. I am backed by the AI Cascade configuration. Ask me about classification tiers, specific attack signatures, or model tuning parameters.",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      source: 'Rule-Based'
-    }
-  ]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; time: string; source?: string; responseTime?: string; isError?: boolean }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [aiTyping, setAiTyping] = useState(false);
+  const [geminiAvailable, setGeminiAvailable] = useState<boolean>(true);
+  const [inputFocused, setInputFocused] = useState<boolean>(false);
+
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatQueueRef = useRef<string[]>([]);
+  const processingRef = useRef<boolean>(false);
 
   // ==========================================
   // 1. WEBSOCKET FEED + THROTTLED RE-RENDERING
@@ -294,8 +301,8 @@ export const Dashboard: React.FC = () => {
             
             const fromY = isAttack ? 45 : 105;
             const dest_ip = data.dest_ip || '192.168.10.50';
-            const target = dest_ip === '192.168.10.50' ? { x: 410, y: 35 } :
-                           dest_ip === '192.168.10.51' ? { x: 410, y: 75 } : { x: 410, y: 115 };
+            const target = dest_ip === '192.168.10.50' ? { x: 410, y: 25 } :
+                           dest_ip === '192.168.10.51' ? { x: 410, y: 70 } : { x: 410, y: 115 };
                            
             newVectors.push({
               id: Math.random().toString(36).substr(2, 9),
@@ -309,13 +316,15 @@ export const Dashboard: React.FC = () => {
               source_ip: data.source_ip || (isAttack ? '10.0.0.15' : '192.168.10.150'),
               dest_ip,
               source_port: data.source_port || 0,
-              dest_port: data.dest_port || 0
+              dest_port: data.dest_port || 0,
+              confidence: data.confidence || 0.95,
+              createdAt: Date.now()
             });
           }
         });
 
         if (newVectors.length > 0) {
-          setActiveVectors((prev) => [...prev, ...newVectors].slice(-15));
+          setActiveVectors((prev) => [...prev, ...newVectors].slice(-6));
         }
 
         // 1. Update overall packet statistics
@@ -351,6 +360,38 @@ export const Dashboard: React.FC = () => {
     }));
     setChartData(initialData);
   }, []);
+
+  // Smart scrolling logic for chatbot
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+    // Smart scroll: only scroll if user is near bottom
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    if (isNearBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, aiTyping]);
+
+  // Poll Gemini status
+  useEffect(() => {
+    const fetchGeminiStatus = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const res = await api.get('/api/chat/status');
+        setGeminiAvailable(res.data.gemini_available);
+      } catch (err) {
+        console.error('Failed to fetch Gemini status:', err);
+        setGeminiAvailable(false);
+      }
+    };
+    
+    if (activeTab === 'ai') {
+      fetchGeminiStatus();
+      const interval = setInterval(fetchGeminiStatus, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
 
   // ==========================================
   // 2. SIMULATOR LOGIC
@@ -516,25 +557,54 @@ export const Dashboard: React.FC = () => {
   // ==========================================
   // 5. AI SECURITY BOT CHAT
   // ==========================================
-  const handleSendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
+  const sendChatMessage = (text: string) => {
+    if (!text.trim()) return;
 
-    const userMsg = chatInput;
+    const userMsg = text;
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Add user message to history immediately
     setMessages((prev) => [...prev, { role: 'user', text: userMsg, time }]);
     setChatInput('');
-    setAiTyping(true);
+    
+    // Refocus the input immediately
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
 
+    // Queue management
+    if (processingRef.current) {
+      chatQueueRef.current.push(userMsg);
+    } else {
+      processingRef.current = true;
+      setAiTyping(true);
+      processNextInQueue(userMsg);
+    }
+  };
+
+  const processNextInQueue = async (text: string) => {
+    const startTime = performance.now();
     try {
-      const res = await api.post('/api/chat', { message: userMsg });
+      const res = await api.post('/api/chat', { message: text });
+      const endTime = performance.now();
+      const durationMs = endTime - startTime;
+      
+      let responseTimeStr = '';
+      if (durationMs < 1000) {
+        responseTimeStr = `${Math.round(durationMs)}ms`;
+      } else {
+        responseTimeStr = `${(durationMs / 1000).toFixed(1)}s`;
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
           text: res.data.answer,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          source: res.data.source
+          source: res.data.source,
+          responseTime: responseTimeStr,
+          isError: res.data.source === 'Error Fallback'
         }
       ]);
     } catch (err: any) {
@@ -543,14 +613,27 @@ export const Dashboard: React.FC = () => {
         ...prev,
         {
           role: 'assistant',
-          text: 'An error occurred while transmitting your request to security intelligence services. Please check network connections.',
+          text: "I'm having trouble right now — please try again in a moment.",
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          source: 'Error Fallback'
+          source: 'Error Fallback',
+          isError: true
         }
       ]);
-    } finally {
+    }
+
+    if (chatQueueRef.current.length > 0) {
+      const nextMsg = chatQueueRef.current.shift()!;
+      processNextInQueue(nextMsg);
+    } else {
+      processingRef.current = false;
       setAiTyping(false);
     }
+  };
+
+  const handleSendChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    sendChatMessage(chatInput);
   };
 
   const getComparisonData = () => {
@@ -896,6 +979,11 @@ export const Dashboard: React.FC = () => {
                           <stop offset="70%" stopColor="var(--color-high)" />
                           <stop offset="100%" stopColor="var(--color-critical)" />
                         </linearGradient>
+                        <radialGradient id="pivotHubGrad" cx="30%" cy="30%" r="70%">
+                          <stop offset="0%" stopColor="#ffffff" />
+                          <stop offset="40%" stopColor="var(--accent-amber)" />
+                          <stop offset="100%" stopColor="#875200" />
+                        </radialGradient>
                       </defs>
                       {/* Grey background track */}
                       <path
@@ -916,33 +1004,47 @@ export const Dashboard: React.FC = () => {
                         strokeDashoffset={251.3 - (251.3 * postureScore) / 100}
                         className="transition-all duration-700 ease-out"
                       />
-                      {/* Gauge ticks */}
-                      <line x1="20" y1="100" x2="25" y2="100" stroke="var(--text-muted)" strokeWidth="2" />
-                      <line x1="100" y1="20" x2="100" y2="25" stroke="var(--text-muted)" strokeWidth="2" />
-                      <line x1="180" y1="100" x2="175" y2="100" stroke="var(--text-muted)" strokeWidth="2" />
                       
-                      {/* Speedometer Needle */}
+                      {/* Subtle instrument radial tick marks at 0%, 25%, 50%, 75%, 100% */}
+                      {[-90, -45, 0, 45, 90].map((angle, idx) => (
+                        <line
+                          key={idx}
+                          x1="100"
+                          y1="20"
+                          x2="100"
+                          y2="14"
+                          stroke="var(--text-secondary)"
+                          strokeWidth="1"
+                          opacity="0.35"
+                          transform={`rotate(${angle}, 100, 100)`}
+                        />
+                      ))}
+                      
+                      {/* Speedometer Needle (thin, sharp, glows slightly, transitions smoothly) */}
                       <line
                         x1="100"
                         y1="100"
                         x2="100"
-                        y2="35"
-                        stroke="#ffffff"
-                        strokeWidth="3.5"
+                        y2="28"
+                        stroke="var(--accent-amber)"
+                        strokeWidth="1.5"
                         strokeLinecap="round"
-                        transform={`rotate(${-90 + ((postureScore - 50) / 100) * 180}, 100, 100)`}
-                        className="transition-all duration-700 ease-out"
-                        style={{ transformOrigin: '100px 100px' }}
+                        style={{ 
+                          transformOrigin: '100px 100px',
+                          transform: `rotate(${-90 + (postureScore / 100) * 180}deg)`,
+                          transition: 'transform 0.8s ease-in-out',
+                          filter: 'drop-shadow(0 0 2px var(--accent-amber))'
+                        }}
                       />
-                      {/* Needle Center Pin */}
-                      <circle cx="100" cy="100" r="7" fill="var(--accent-amber)" />
-                      <circle cx="100" cy="100" r="3" fill="#ffffff" />
+                      
+                      {/* Needle Center Pin (Hub) - 3D spherical rendering */}
+                      <circle cx="100" cy="100" r="4" fill="url(#pivotHubGrad)" stroke="rgba(0, 0, 0, 0.4)" strokeWidth="0.5" />
                     </svg>
 
-                    {/* Numeric Score Overlay */}
-                    <div className="text-center -mt-3.5 z-10">
+                    {/* Numeric Score Overlay (positioned clearly below the pivot hub) */}
+                    <div className="text-center mt-3.5 z-10">
                       <p className="text-2xl font-black text-white tracking-tight leading-none font-mono">{postureScore}%</p>
-                      <span className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold">Risk Index</span>
+                      <span className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold font-sans mt-0.5 block">Risk Index</span>
                     </div>
                   </div>
 
@@ -962,72 +1064,144 @@ export const Dashboard: React.FC = () => {
 
                 {/* 2. Interactive Live Attack Map */}
                 <GlowPanel className="lg:col-span-2 flex flex-col justify-between h-[230px] relative overflow-hidden p-5">
-                  <div className="w-full flex justify-between items-center pb-2 border-b border-[var(--border-subtle)] shrink-0">
+                  <div className="w-full flex justify-between items-center pb-2 border-b border-[var(--border-subtle)] shrink-0 z-10">
                     <div className="flex items-center gap-2">
                       <Activity className="w-4 h-4 text-[var(--accent-amber)]" />
                       <h3 className="text-xs font-bold text-white tracking-wide uppercase font-display">Live Attack & Traffic Map</h3>
                     </div>
-                    <div className="flex items-center gap-1.5 text-[8px] text-[var(--text-secondary)] font-mono">
-                      <span>Telemetry Visualization Layer</span>
+                    <div className="flex items-center gap-2 text-[8px] font-mono">
+                      {simStatus.running ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse shadow-[0_0_8px_var(--accent-amber)]" />
+                          <span className="text-[var(--accent-amber)] font-bold tracking-wider">LIVE</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-650" />
+                          <span className="text-slate-500 font-bold tracking-wider">IDLE</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* SVG Attack Vector Canvas */}
-                  <div className="flex-1 w-full relative mt-2">
-                    <svg width="100%" height="100%" viewBox="0 0 500 150" className="overflow-visible">
+                  <div className="flex-1 w-full relative mt-2 overflow-hidden rounded-[var(--radius-sm)]">
+                    <RadarBackground isFixed={false} />
+                    
+                    <svg width="100%" height="100%" viewBox="0 0 500 150" className="overflow-visible relative z-10">
+                      {/* CSS Keyframes Injection */}
+                      <style dangerouslySetInnerHTML={{ __html: `
+                        @keyframes attacker-glow-active {
+                          0% { r: 14px; opacity: 0.15; }
+                          50% { r: 24px; opacity: 0.55; }
+                          100% { r: 14px; opacity: 0.15; }
+                        }
+                        @keyframes attacker-glow-calm {
+                          0% { r: 14px; opacity: 0.08; }
+                          50% { r: 18px; opacity: 0.15; }
+                          100% { r: 14px; opacity: 0.08; }
+                        }
+                        @keyframes client-glow-calm {
+                          0% { r: 12px; opacity: 0.08; }
+                          50% { r: 16px; opacity: 0.15; }
+                          100% { r: 12px; opacity: 0.08; }
+                        }
+                        @keyframes map-vector-fade {
+                          0% { opacity: 0; }
+                          15% { opacity: 1; }
+                          75% { opacity: 1; }
+                          100% { opacity: 0; }
+                        }
+                      `}} />
+
                       {/* 1. Draw static topological connections as background mesh */}
-                      <path d="M 50 45 Q 230 20 410 35" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 45 Q 230 60 410 75" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+                      <path d="M 50 45 Q 230 20 410 25" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+                      <path d="M 50 45 Q 230 60 410 70" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
                       <path d="M 50 45 Q 230 80 410 115" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 105 Q 230 70 410 35" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 105 Q 230 90 410 75" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+                      <path d="M 50 105 Q 230 70 410 25" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+                      <path d="M 50 105 Q 230 90 410 70" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
                       <path d="M 50 105 Q 230 110 410 115" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
 
                       {/* 2. Left Node Group: Source Pools */}
                       {/* Attacker Node Pool */}
-                      <circle cx="50" cy="45" r="15" fill="var(--color-critical)" opacity="0.05" />
-                      <circle cx="50" cy="45" r="10" stroke="var(--color-critical)" strokeWidth="1.5" fill="var(--bg-base)" />
-                      <text x="50" y="48" fill="var(--color-critical)" fontSize="8" textAnchor="middle" fontWeight="bold" className="font-mono select-none">ATK</text>
-                      <text x="50" y="24" fill="var(--color-critical)" fontSize="7" textAnchor="middle" fontWeight="bold" className="select-none uppercase tracking-wider font-sans">Attacker Pool</text>
+                      <circle 
+                        cx="50" 
+                        cy="45" 
+                        r="14"
+                        fill="var(--color-critical)" 
+                        style={{ 
+                          animation: simStatus.running 
+                            ? 'attacker-glow-active 1.5s infinite ease-in-out' 
+                            : 'attacker-glow-calm 3s infinite ease-in-out',
+                          transformOrigin: '50px 45px'
+                        }} 
+                      />
+                      <circle cx="50" cy="45" r="12" stroke="var(--color-critical)" strokeWidth="1.5" fill="rgba(239, 68, 68, 0.15)" />
+                      <text x="50" y="48" fill="var(--color-critical)" fontSize="7" textAnchor="middle" fontWeight="bold" className="font-mono select-none">ATK</text>
+                      <text x="50" y="24" fill="var(--color-critical)" fontSize="7.5" textAnchor="middle" fontWeight="bold" className="select-none uppercase tracking-wider font-sans">Attacker Pool</text>
 
                       {/* Client Node Pool */}
-                      <circle cx="50" cy="105" r="15" fill="var(--color-calm)" opacity="0.05" />
-                      <circle cx="50" cy="105" r="10" stroke="var(--color-calm)" strokeWidth="1.5" fill="var(--bg-base)" />
-                      <text x="50" y="108" fill="var(--color-calm)" fontSize="8" textAnchor="middle" fontWeight="bold" className="font-mono select-none">USR</text>
-                      <text x="50" y="126" fill="var(--color-calm)" fontSize="7" textAnchor="middle" fontWeight="bold" className="select-none uppercase tracking-wider font-sans">Clients (Benign)</text>
+                      <circle 
+                        cx="50" 
+                        cy="105" 
+                        r="12"
+                        fill="var(--color-calm)" 
+                        style={{ 
+                          animation: 'client-glow-calm 4s infinite ease-in-out',
+                          transformOrigin: '50px 105px'
+                        }} 
+                      />
+                      <circle cx="50" cy="105" r="10" stroke="var(--color-calm)" strokeWidth="1.5" fill="rgba(45, 212, 191, 0.12)" />
+                      <text x="50" y="108" fill="var(--color-calm)" fontSize="7" textAnchor="middle" fontWeight="bold" className="font-mono select-none">USR</text>
+                      <text x="50" y="126" fill="var(--color-calm)" fontSize="7.5" textAnchor="middle" fontWeight="bold" className="select-none uppercase tracking-wider font-sans">Clients (Benign)</text>
 
                       {/* 3. Internal Network Boundary (Right) */}
-                      <rect x="320" y="10" width="170" height="120" rx="6" fill="none" stroke="var(--border-subtle)" strokeWidth="1" strokeDasharray="3 3" />
-                      <text x="405" y="124" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" fontWeight="bold" letterSpacing="1" className="select-none font-mono">INTERNAL LAN</text>
+                      <rect x="320" y="8" width="170" height="138" rx="6" fill="none" stroke="var(--border-subtle)" strokeWidth="1" strokeDasharray="3 3" />
+                      <text x="405" y="20" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" fontWeight="bold" letterSpacing="1.5" className="select-none font-sans uppercase opacity-60">INTERNAL LAN</text>
 
                       {/* Web Server Node */}
-                      <circle cx="340" cy="35" r="6" stroke="var(--accent-amber)" strokeWidth="1.5" fill="var(--bg-base)" />
-                      <text x="355" y="38" fill="var(--text-primary)" fontSize="8" textAnchor="start" fontWeight="semibold" className="select-none font-sans">Web Server</text>
-                      <text x="355" y="45" fill="var(--text-secondary)" fontSize="6.5" textAnchor="start" className="font-mono select-none">192.168.10.50</text>
+                      <circle cx="410" cy="25" r="10" stroke="var(--border-subtle)" strokeWidth="1.5" fill="var(--bg-panel-raised)" />
+                      <text x="410" y="28" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">WS</text>
+                      <text x="410" y="44" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">Web Server</text>
+                      <text x="410" y="52" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.50</text>
 
                       {/* DB Server Node */}
-                      <circle cx="340" cy="75" r="6" stroke="var(--accent-amber)" strokeWidth="1.5" fill="var(--bg-base)" />
-                      <text x="355" y="78" fill="var(--text-primary)" fontSize="8" textAnchor="start" fontWeight="semibold" className="select-none font-sans">DB Server</text>
-                      <text x="355" y="85" fill="var(--text-secondary)" fontSize="6.5" textAnchor="start" className="font-mono select-none">192.168.10.51</text>
+                      <circle cx="410" cy="70" r="10" stroke="var(--border-subtle)" strokeWidth="1.5" fill="var(--bg-panel-raised)" />
+                      <text x="410" y="73" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">DB</text>
+                      <text x="410" y="89" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">DB Server</text>
+                      <text x="410" y="97" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.51</text>
 
                       {/* Workstation Node */}
-                      <circle cx="340" cy="115" r="6" stroke="var(--accent-amber)" strokeWidth="1.5" fill="var(--bg-base)" />
-                      <text x="355" y="118" fill="var(--text-primary)" fontSize="8" textAnchor="start" fontWeight="semibold" className="select-none font-sans">Workstation</text>
-                      <text x="355" y="125" fill="var(--text-secondary)" fontSize="6.5" textAnchor="start" className="font-mono select-none">192.168.10.100</text>
+                      <circle cx="410" cy="115" r="10" stroke="var(--border-subtle)" strokeWidth="1.5" fill="var(--bg-panel-raised)" />
+                      <text x="410" y="118" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">PC</text>
+                      <text x="410" y="134" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">Workstation</text>
+                      <text x="410" y="142" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.100</text>
 
                       {/* 4. Active flow vectors mapping */}
-                      {activeVectors.map((vec) => {
-                        const color = 
-                          vec.label === 'BENIGN' ? 'var(--color-calm)' :
-                          (vec.label.includes('DDoS') || vec.label.includes('Hulk') || vec.label.includes('GoldenEye') || vec.label.includes('slowloris') || vec.label.includes('Slowhttptest') || vec.label.includes('Heartbleed')) ? 'var(--color-critical)' :
-                          vec.label.includes('PortScan') ? 'var(--color-medium)' :
-                          (vec.label.includes('Brute') || vec.label.includes('Patator') || vec.label.includes('Infiltration') || vec.label.includes('Web Attack') || vec.label.includes('Sql Injection') || vec.label.includes('XSS')) ? 'var(--color-high)' : 'var(--color-low)';
+                      {activeVectors.map((vec, index) => {
+                        // Count concurrent vectors to offset curves dynamically
+                        const concurrentCount = activeVectors.slice(0, index).filter(v => v.toY === vec.toY).length;
+                        const offsetDirection = concurrentCount % 2 === 0 ? 1 : -1;
+                        const multiplier = Math.floor((concurrentCount + 1) / 2);
+                        const dynamicOffset = offsetDirection * multiplier * 12;
+
+                        const isBenign = vec.label.toUpperCase() === 'BENIGN';
+                        const severityUpper = (vec.severity || 'Info').toUpperCase();
+                        const color = isBenign ? 'var(--color-calm)' :
+                          severityUpper === 'CRITICAL' ? 'var(--color-critical)' :
+                          severityUpper === 'HIGH' ? 'var(--color-high)' :
+                          severityUpper === 'MEDIUM' ? 'var(--color-medium)' :
+                          'var(--color-low)'; // Low / Info
+                          
                         const strokeWidth = vec.isAttack ? 2.5 : 1.2;
-                        const controlOffset = vec.isAttack ? -35 : -15;
+                        const controlOffset = (vec.isAttack ? -35 : -15) + dynamicOffset;
                         const pathString = `M ${vec.fromX} ${vec.fromY} Q ${(vec.fromX + vec.toX)/2} ${(vec.fromY + vec.toY)/2 + controlOffset} ${vec.toX} ${vec.toY}`;
                         
                         return (
-                          <g key={vec.id}>
+                          <g 
+                            key={vec.id} 
+                            style={{ animation: 'map-vector-fade 1.8s ease-in-out forwards' }}
+                          >
                             {/* Animated vector line path */}
                             <path
                               d={pathString}
@@ -1038,39 +1212,78 @@ export const Dashboard: React.FC = () => {
                               strokeLinecap="round"
                               className="transition-all duration-1000"
                             />
-                            {/* Flying laser bullet */}
-                            <circle r={vec.isAttack ? 3 : 2} fill="#ffffff">
+                            {/* Flying laser bullet glow halo */}
+                            <circle r={vec.isAttack ? 6 : 4} fill={color} opacity="0.35">
                               <animateMotion
                                 path={pathString}
-                                dur="0.8s"
+                                dur="1.2s"
+                                calcMode="spline"
+                                keyTimes="0;1"
+                                keySplines="0.25 1 0.5 1"
+                                repeatCount="1"
+                                fill="freeze"
+                              />
+                            </circle>
+                            {/* Flying laser bullet */}
+                            <circle r={vec.isAttack ? 2.5 : 1.5} fill="#ffffff">
+                              <animateMotion
+                                path={pathString}
+                                dur="1.2s"
+                                calcMode="spline"
+                                keyTimes="0;1"
+                                keySplines="0.25 1 0.5 1"
                                 repeatCount="1"
                                 fill="freeze"
                               />
                             </circle>
 
                             {/* Destination server impact flash */}
-                            <circle cx={vec.toX} cy={vec.toY} r="10" stroke={color} strokeWidth="1" fill="none" className="animate-ping" opacity="0.3" />
+                            <circle cx={vec.toX} cy={vec.toY} r="12" stroke={color} strokeWidth="1.5" fill="none" className="animate-ping" opacity="0.4" style={{ animationDuration: '1.5s' }} />
 
-                            {/* Real-time IP address / Port annotation overlay */}
-                            <text
-                              x={(vec.fromX + vec.toX)/2}
-                              y={(vec.fromY + vec.toY)/2 + controlOffset - 12}
-                              fill={color}
-                              fontSize="6"
-                              textAnchor="middle"
-                              fontWeight="bold"
-                              className="font-mono select-none pointer-events-none drop-shadow shadow-slate-950 animate-pulse bg-slate-950 px-1 py-0.5 rounded"
-                            >
-                              {vec.isAttack ? `${vec.label} (${vec.source_ip}:${vec.source_port} → ${vec.dest_port})` : `BENIGN (${vec.source_ip} → ${vec.dest_port})`}
-                            </text>
+                            {/* Transparent thicker path for easy hovering */}
+                            <path
+                              d={pathString}
+                              fill="none"
+                              stroke="transparent"
+                              strokeWidth="8"
+                              className="cursor-pointer"
+                              onMouseEnter={() => setHoveredVector(vec)}
+                              onMouseLeave={() => setHoveredVector(null)}
+                            />
                           </g>
                         );
                       })}
                     </svg>
 
+                    {/* Tooltip Overlay */}
+                    {hoveredVector && (
+                      <div 
+                        className="absolute bg-[var(--bg-panel-raised)] border border-[var(--accent-amber)]/40 rounded px-2.5 py-1.5 pointer-events-none text-[8.5px] font-mono text-white shadow-xl z-30 transition-all duration-150"
+                        style={{
+                          left: `${(hoveredVector.fromX + hoveredVector.toX) / 2 / 5}%`,
+                          top: `${((hoveredVector.fromY + hoveredVector.toY) / 2 + (hoveredVector.isAttack ? -35 : -15)) / 1.5}%`,
+                          transform: 'translate(-50%, -100%)',
+                          marginTop: '-8px'
+                        }}
+                      >
+                        <div className="font-bold text-[var(--accent-amber)] mb-0.5 font-sans uppercase text-[9px]">
+                          {hoveredVector.label}
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Route:</span> {hoveredVector.source_ip}:{hoveredVector.source_port} &rarr; {hoveredVector.dest_ip}:{hoveredVector.dest_port}
+                        </div>
+                        <div className="mt-0.5">
+                          <span className="text-slate-400">Confidence:</span> <span className="text-slate-200">{(hoveredVector.confidence * 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="mt-0.5">
+                          <span className="text-slate-400">Severity:</span> <span style={{ color: hoveredVector.isAttack ? 'var(--color-critical)' : 'var(--color-calm)' }} className="font-bold">{hoveredVector.severity}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Threat Map overlay */}
                     {activeVectors.length === 0 && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10">
                         <span className="text-[9px] text-[var(--text-secondary)] font-mono tracking-wider uppercase animate-pulse">
                           Awaiting Ingress Stream Telemetry...
                         </span>
@@ -1079,14 +1292,33 @@ export const Dashboard: React.FC = () => {
                   </div>
 
                   {/* Legend Overlay at the bottom */}
-                  <div className="flex justify-between items-center bg-[var(--bg-base)] border border-[var(--border-subtle)] rounded-lg px-3 py-1.5 text-[7px] font-mono text-[var(--text-secondary)] shrink-0 mt-2">
-                    <div className="flex gap-4">
-                      <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[var(--color-calm)]" /> Benign</div>
-                      <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[var(--color-critical)]" /> DDoS/DoS/Heartbleed</div>
-                      <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[var(--color-medium)]" /> PortScan</div>
-                      <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[var(--color-high)]" /> Web/Brute/Infiltration</div>
+                  <div className="flex justify-between items-center bg-[var(--bg-base)] border border-[var(--border-subtle)] rounded-[var(--radius-sm)] px-3 py-1.5 text-[8px] font-mono text-[var(--text-secondary)] shrink-0 mt-2 z-10">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[7.5px] font-bold text-slate-500 uppercase tracking-wider">Severity Scale:</span>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[7.5px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--color-calm)]/10 text-[var(--color-calm)] bg-[var(--color-calm)]/10">
+                          <span className="w-1 h-1 rounded-full bg-[var(--color-calm)] animate-pulse" />
+                          Benign
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[7.5px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--color-low)]/10 text-[var(--color-low)] bg-[var(--color-low)]/10">
+                          <span className="w-1 h-1 rounded-full bg-[var(--color-low)]" />
+                          Low
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[7.5px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--color-medium)]/10 text-[var(--color-medium)] bg-[var(--color-medium)]/10">
+                          <span className="w-1 h-1 rounded-full bg-[var(--color-medium)]" />
+                          Medium
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[7.5px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--color-high)]/10 text-[var(--color-high)] bg-[var(--color-high)]/10">
+                          <span className="w-1 h-1 rounded-full bg-[var(--color-high)] animate-pulse" />
+                          High
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[7.5px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--color-critical)]/10 text-[var(--color-critical)] bg-[var(--color-critical)]/10">
+                          <span className="w-1 h-1 rounded-full bg-[var(--color-critical)] animate-pulse" />
+                          Critical
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-[6.5px] text-[var(--accent-amber)] font-semibold animate-pulse uppercase tracking-wide">Live Attack Monitor</span>
+                    <span className="text-[7px] text-[var(--accent-amber)] font-bold animate-pulse uppercase tracking-wider font-display">Live Attack Monitor</span>
                   </div>
                 </GlowPanel>
               </div>
@@ -1691,33 +1923,50 @@ export const Dashboard: React.FC = () => {
 
               {!loadingMetrics && metricsData && (
                 <>
-                  {/* Cascade Logic Diagram */}
-                  <GlowPanel className="p-5 shrink-0">
-                    <div className="pb-3 border-b border-[var(--border-subtle)]/40 mb-5">
-                      <h3 className="text-xs font-bold text-white tracking-wide uppercase font-display">AI Cascade Decision logic</h3>
-                    </div>
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-[10px] text-[var(--text-secondary)]">
-                      <div className="p-4 bg-[var(--bg-base)] border border-[var(--border-subtle)] rounded-lg text-center flex-1 w-full md:w-auto">
-                        <p className="font-bold text-slate-200 mb-1">Incoming Flow Packet</p>
-                        <span>Extracts top-30 select features</span>
+                  {/* Top Row: Diagram + Rationale Explanation */}
+                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 shrink-0">
+                    <GlowPanel className="lg:col-span-3 p-5">
+                      <div className="pb-3 border-b border-[var(--border-subtle)]/40 mb-5">
+                        <h3 className="text-xs font-bold text-white tracking-wide uppercase font-display">AI Cascade Decision logic</h3>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-700 hidden md:block shrink-0" />
-                      <div className="p-4 bg-[var(--bg-base)] border border-[var(--accent-amber)]/20 rounded-lg text-center flex-1 w-full md:w-auto shadow-md shadow-[var(--accent-amber-glow)]/5">
-                        <p className="font-bold text-[var(--accent-amber)] mb-1">Tier 1: LightGBM</p>
-                        <span>Is Max Conf &gt;= 0.85?</span>
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-[10px] text-[var(--text-secondary)]">
+                        <div className="p-4 bg-[var(--bg-base)] border border-[var(--border-subtle)] rounded-lg text-center flex-1 w-full md:w-auto">
+                          <p className="font-bold text-slate-200 mb-1">Incoming Flow Packet</p>
+                          <span>Extracts top-30 select features</span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-slate-700 hidden md:block shrink-0" />
+                        <div className="p-4 bg-[var(--bg-base)] border border-[var(--accent-amber)]/20 rounded-lg text-center flex-1 w-full md:w-auto shadow-md shadow-[var(--accent-amber-glow)]/5">
+                          <p className="font-bold text-[var(--accent-amber)] mb-1">Tier 1: LightGBM</p>
+                          <span>Is Max Conf &gt;= 0.85?</span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-slate-700 hidden md:block shrink-0" />
+                        <div className="p-4 bg-[var(--bg-base)] border border-[var(--accent-amber)]/20 rounded-lg text-center flex-1 w-full md:w-auto shadow-md shadow-[var(--accent-amber-glow)]/5">
+                          <p className="font-bold text-[var(--accent-amber)] mb-1">Tier 2: Random Forest</p>
+                          <span>Is Max Conf &gt;= 0.85?</span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-slate-700 hidden md:block shrink-0" />
+                        <div className="p-4 bg-[var(--bg-base)] border border-[var(--color-calm)]/20 rounded-lg text-center flex-1 w-full md:w-auto shadow-md shadow-[var(--color-calm)]/5">
+                          <p className="font-bold text-[var(--color-calm)] mb-1">Tier 3: Expert Ensemble</p>
+                          <span>Weighted Prob ArgMax Vote</span>
+                        </div>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-700 hidden md:block shrink-0" />
-                      <div className="p-4 bg-[var(--bg-base)] border border-[var(--accent-amber)]/20 rounded-lg text-center flex-1 w-full md:w-auto shadow-md shadow-[var(--accent-amber-glow)]/5">
-                        <p className="font-bold text-[var(--accent-amber)] mb-1">Tier 2: Random Forest</p>
-                        <span>Is Max Conf &gt;= 0.85?</span>
+                    </GlowPanel>
+
+                    <GlowPanel className="lg:col-span-2 p-5 flex flex-col justify-between">
+                      <div className="pb-3 border-b border-[var(--border-subtle)]/40 mb-3">
+                        <h3 className="text-xs font-bold text-white tracking-wide uppercase font-display">Why a Cascade?</h3>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-slate-700 hidden md:block shrink-0" />
-                      <div className="p-4 bg-[var(--bg-base)] border border-[var(--color-calm)]/20 rounded-lg text-center flex-1 w-full md:w-auto shadow-md shadow-[var(--color-calm)]/5">
-                        <p className="font-bold text-[var(--color-calm)] mb-1">Tier 3: Expert Ensemble</p>
-                        <span>Weighted Prob ArgMax Vote</span>
+                      <div className="flex-1 flex flex-col justify-center">
+                        <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-sans">
+                          To handle volumetric traffic, our pipeline cascades decisions through three models. This maximizes accuracy and speed while minimizing resource costs.
+                        </p>
+                        <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] mt-2 font-sans">
+                          <strong>Tier 1 (LightGBM)</strong> screens all incoming traffic. If confidence is high (<strong>&ge; 85%</strong>), the decision is finalized instantly. 
+                          If uncertain, the packet escalates to <strong>Tier 2 (Random Forest)</strong>. If uncertainty persists, the <strong>Tier 3 Ensemble (XGBoost + T1 + T2)</strong> makes the final verdict using a weighted vote.
+                        </p>
                       </div>
-                    </div>
-                  </GlowPanel>
+                    </GlowPanel>
+                  </div>
 
                   {/* Benchmarks Metrics Comparison */}
                   <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 shrink-0">
@@ -1766,19 +2015,19 @@ export const Dashboard: React.FC = () => {
                           <div>
                             <span className="text-[9px] font-bold text-[var(--accent-amber)] uppercase tracking-wider font-display block">1. Tier 1: LightGBM (Screener)</span>
                             <p className="text-[10.5px] leading-relaxed text-[var(--text-secondary)] mt-1 font-sans">
-                              Selected for speed (~10.2 μs). Screens out 90%+ clear-cut BENIGN flows immediately, protecting backend threads from volumetric spikes.
+                              Selected for highest overall accuracy (99.472%). Handles the clear majority of classification decisions with strong confidence, escalating only uncertain cases to Tier 2 to preserve system reliability.
                             </p>
                           </div>
                           <div>
                             <span className="text-[9px] font-bold text-[var(--accent-amber)] uppercase tracking-wider font-display block">2. Tier 2: Random Forest (Validator)</span>
                             <p className="text-[10.5px] leading-relaxed text-[var(--text-secondary)] mt-1 font-sans">
-                              Queried only on LGBM uncertainty. Extremely fast (~2.88 μs) and highly explainable, driving local XAI feature attributions for logged threat alerts.
+                              Queried only on LightGBM uncertainty. Fastest model at inference (2.88 μs) and highly explainable — drives the local XAI feature attributions shown in the Explain This Packet panel.
                             </p>
                           </div>
                           <div>
-                            <span className="text-[9px] font-bold text-[var(--color-calm)] uppercase tracking-wider font-display block">3. Tier 3: Ensemble (Vote Arbiter)</span>
+                            <span className="text-[9px] font-bold text-[var(--color-calm)] uppercase tracking-wider font-display block">3. Tier 3: XGBoost (Vote Arbiter)</span>
                             <p className="text-[10.5px] leading-relaxed text-[var(--text-secondary)] mt-1 font-sans">
-                              Handles low-confidence edge cases. Executes a weighted ensemble vote (LGBM 0.2 / RF 0.3 / XGB 0.5) to minimize false alarm ratios.
+                              Handles low-confidence edge cases that neither Tier 1 nor Tier 2 resolved with sufficient certainty. Executes a weighted ensemble vote (LGBM 0.2 / RF 0.3 / XGB 0.5) across all three models to minimize false alarm ratios on ambiguous traffic.
                             </p>
                           </div>
                         </div>
@@ -1954,79 +2203,247 @@ export const Dashboard: React.FC = () => {
               VIEW E: AI SECURITY CHAT ASSISTANT
               ========================================== */}
           {activeTab === 'ai' && (
-            <div className="flex flex-col gap-6 max-w-4xl mx-auto h-[480px]">
-              <GlowPanel className="flex-1 flex flex-col overflow-hidden p-0">
+            <div className="flex flex-col gap-6 max-w-4xl mx-auto h-[550px] relative w-full">
+              <GlowPanel className="flex-1 flex flex-col overflow-hidden p-0 relative">
                 {/* Chat header */}
-                <div className="px-6 py-4 bg-[var(--bg-panel-raised)] border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-[var(--accent-amber-glow)] border border-[var(--accent-amber)] rounded-lg text-[var(--accent-amber)]">
-                      <Sparkles className="w-4 h-4 animate-pulse" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-white tracking-wide uppercase font-display">SOC Intelligence Assistant</h4>
-                      <span className="text-[8px] text-[var(--color-calm)] font-semibold block font-mono">Cascade Agent Model Loaded</span>
-                    </div>
+                <div className="px-6 py-4 bg-[var(--bg-panel-raised)] border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[var(--accent-amber)] animate-pulse shadow-[0_0_8px_var(--accent-amber)]" />
+                    <h4 className="text-xs font-bold text-white tracking-widest uppercase font-display">
+                      AI SECURITY ASSISTANT
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-teal-400/20 bg-teal-950/20 text-teal-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                      RULE-BASE: ACTIVE
+                    </span>
+                    {geminiAvailable ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--accent-amber)]/20 bg-amber-950/20 text-[var(--accent-amber)]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse" />
+                        GEMINI: CONNECTED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-slate-500/20 bg-slate-900/50 text-slate-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                        GEMINI: UNAVAILABLE
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 {/* Message Log */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                  {messages.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex flex-col max-w-[80%] ${
-                        msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
-                      }`}
-                    >
-                      {msg.role === 'user' ? (
-                        <div className="p-3.5 bg-[var(--accent-amber-glow)] border border-[var(--accent-amber)]/20 text-white rounded-2xl rounded-tr-none text-xs leading-relaxed max-w-[85%] font-sans animate-fade-in">
-                          {msg.text}
-                        </div>
-                      ) : (
-                        <div className="relative p-3.5 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] text-[var(--text-primary)] rounded-2xl rounded-tl-none text-xs leading-relaxed max-w-[85%] shadow-[0_0_12px_rgba(245,166,35,0.05)] animate-fade-in">
-                          <span className="absolute top-[-1px] left-[-1px] w-1.5 h-1.5 border-t border-l border-[var(--accent-amber)] rounded-tl-[var(--radius-sm)]" />
-                          <span className="absolute top-[-1px] right-[-1px] w-1.5 h-1.5 border-t border-r border-[var(--accent-amber)] rounded-tr-[var(--radius-sm)]" />
-                          <span className="absolute bottom-[-1px] left-[-1px] w-1.5 h-1.5 border-b border-l border-[var(--accent-amber)] rounded-bl-[var(--radius-sm)]" />
-                          <span className="absolute bottom-[-1px] right-[-1px] w-1.5 h-1.5 border-b border-r border-[var(--accent-amber)] rounded-br-[var(--radius-sm)]" />
-                          <div>{msg.text}</div>
-                          {msg.source && (
-                            <div className="mt-2.5 flex items-center justify-end">
-                              <StatusBadge status={msg.source} />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      <span className="text-[8px] text-[var(--text-secondary)] mt-1 block px-1 font-mono">{msg.time}</span>
-                    </div>
-                  ))}
+                <div 
+                  ref={chatContainerRef}
+                  className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--bg-base)] relative overflow-hidden flex flex-col"
+                >
+                  <RadarBackground isFixed={false} className="opacity-[0.05]" />
+                  
+                  <style dangerouslySetInnerHTML={{ __html: `
+                    @keyframes typing-dot-1 {
+                      0%, 100% { opacity: 0.3; transform: translateY(0px); }
+                      50% { opacity: 1; transform: translateY(-4px); }
+                    }
+                    @keyframes typing-dot-2 {
+                      0%, 100% { opacity: 0.3; transform: translateY(0px); }
+                      50% { opacity: 1; transform: translateY(-4px); }
+                    }
+                    @keyframes typing-dot-3 {
+                      0%, 100% { opacity: 0.3; transform: translateY(0px); }
+                      50% { opacity: 1; transform: translateY(-4px); }
+                    }
+                    @keyframes radar-spin-tiny {
+                      from { transform: rotate(0deg); }
+                      to { transform: rotate(360deg); }
+                    }
+                  `}} />
 
-                  {aiTyping && (
-                    <div className="flex items-center gap-2.5 bg-[var(--bg-panel)] border border-[var(--border-subtle)] px-4 py-3 rounded-2xl text-[10px] text-[var(--text-secondary)] w-fit rounded-tl-none font-mono animate-pulse">
-                      <div className="relative w-2 h-2 flex items-center justify-center shrink-0">
-                        <span className="absolute w-2 h-2 rounded-full bg-[var(--accent-amber)] opacity-75 animate-ping"></span>
-                        <span className="absolute w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)]"></span>
+                  {messages.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto relative z-10 animate-fade-in my-auto">
+                      <h2 className="text-xl font-bold text-white tracking-wider uppercase font-display mb-2">
+                        SENTINEL AI
+                      </h2>
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-6 font-body">
+                        Ask me anything about cybersecurity, this system, or any active threat.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3 w-full">
+                        {[
+                          "What is a DDoS attack?",
+                          "How does the cascade work?",
+                          "Explain the last alert",
+                          "What is SMOTE?"
+                        ].map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => sendChatMessage(q)}
+                            className="px-3 py-2 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] hover:border-[var(--accent-amber)] hover:text-white rounded-[var(--radius-sm)] text-[10px] text-[var(--text-secondary)] font-mono transition-all text-left truncate cursor-pointer hover:shadow-[0_0_8px_rgba(245,166,35,0.1)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-amber)]"
+                          >
+                            {q}
+                          </button>
+                        ))}
                       </div>
-                      <span>Analyzing security context...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-5 relative z-10 flex flex-col">
+                      {messages.map((msg, i) => {
+                        const isUser = msg.role === 'user';
+                        return (
+                          <div
+                            key={i}
+                            className={`flex flex-col max-w-[80%] ${
+                              isUser ? 'ml-auto items-end' : 'mr-auto items-start'
+                            }`}
+                          >
+                            <span className="text-[8px] text-[var(--text-secondary)] mb-1 block px-1 font-mono uppercase tracking-wider">
+                              {isUser ? (
+                                "YOU"
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                                    <svg 
+                                      className="w-full h-full text-[var(--accent-amber)]" 
+                                      viewBox="0 0 24 24" 
+                                      fill="none" 
+                                      stroke="currentColor" 
+                                      strokeWidth="1.5"
+                                      style={{ 
+                                        animation: 'radar-spin-tiny 3s linear infinite',
+                                        transformOrigin: '12px 12px'
+                                      }}
+                                    >
+                                      <circle cx="12" cy="12" r="10" strokeDasharray="3 3" stroke="currentColor" strokeWidth="0.8" />
+                                      <path d="M 12 12 L 12 2 A 10 10 0 0 1 22 12 Z" fill="rgba(245,166,35,0.15)" stroke="none" />
+                                      <line x1="12" y1="12" x2="12" y2="2" stroke="currentColor" strokeWidth="1.5" />
+                                    </svg>
+                                  </div>
+                                  <span>SENTINEL AI</span>
+                                </div>
+                              )}
+                            </span>
+
+                            {isUser ? (
+                              <div 
+                                style={{ 
+                                  backgroundColor: 'rgba(245, 166, 35, 0.11)', 
+                                  borderColor: 'rgba(245, 166, 35, 0.3)' 
+                                }}
+                                className="p-3.5 border text-[var(--text-primary)] rounded-2xl rounded-tr-none text-xs leading-relaxed max-w-full font-body animate-fade-in shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                              >
+                                {msg.text}
+                              </div>
+                            ) : (
+                              <div 
+                                className={`relative p-3.5 bg-[var(--bg-panel-raised)] border ${
+                                  msg.isError ? 'border-red-500/40 shadow-[0_0_12px_rgba(239,68,68,0.1)]' : 'border-[var(--border-subtle)]'
+                                } text-[var(--text-primary)] rounded-2xl rounded-tl-none text-xs leading-relaxed max-w-full shadow-[0_2px_8px_rgba(0,0,0,0.2)] animate-fade-in`}
+                              >
+                                <span className="absolute top-[-1px] left-[-1px] w-1.5 h-1.5 border-t border-l border-[var(--accent-amber)] rounded-tl-[var(--radius-sm)]" />
+                                <span className="absolute top-[-1px] right-[-1px] w-1.5 h-1.5 border-t border-r border-[var(--accent-amber)] rounded-tr-[var(--radius-sm)]" />
+                                <span className="absolute bottom-[-1px] left-[-1px] w-1.5 h-1.5 border-b border-l border-[var(--accent-amber)] rounded-bl-[var(--radius-sm)]" />
+                                <span className="absolute bottom-[-1px] right-[-1px] w-1.5 h-1.5 border-b border-r border-[var(--accent-amber)] rounded-br-[var(--radius-sm)]" />
+                                
+                                <div className="font-body whitespace-pre-wrap">{msg.text}</div>
+                                
+                                {(msg.source || msg.responseTime) && (
+                                  <div className="mt-2.5 pt-2 border-t border-[var(--border-subtle)]/30 flex items-center gap-2 justify-end">
+                                    {msg.source && (
+                                      <>
+                                        {msg.source.toLowerCase().includes('gemini') ? (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--accent-amber)]/20 bg-amber-950/20 text-[var(--accent-amber)]">
+                                            ✦ GEMINI
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider rounded-full border border-teal-400/20 bg-teal-950/20 text-teal-400">
+                                            ⚡ RULE-BASE
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                    {msg.responseTime && (
+                                      <span className="text-[9px] text-[var(--text-secondary)] font-mono">
+                                        {msg.responseTime}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <span className="text-[7.5px] text-[var(--text-secondary)] mt-1 block px-1 font-mono tracking-wider">{msg.time}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
+
+                  {aiTyping && (
+                    <div className="flex flex-col max-w-[80%] mr-auto items-start relative z-10 animate-fade-in">
+                      <span className="text-[8px] text-[var(--text-secondary)] mb-1 block px-1 font-mono uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                            <svg 
+                              className="w-full h-full text-[var(--accent-amber)]" 
+                              viewBox="0 0 24 24" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              strokeWidth="1.5"
+                              style={{ 
+                                animation: 'radar-spin-tiny 3s linear infinite',
+                                transformOrigin: '12px 12px'
+                              }}
+                            >
+                              <circle cx="12" cy="12" r="10" strokeDasharray="3 3" stroke="currentColor" strokeWidth="0.8" />
+                              <path d="M 12 12 L 12 2 A 10 10 0 0 1 22 12 Z" fill="rgba(245,166,35,0.15)" stroke="none" />
+                              <line x1="12" y1="12" x2="12" y2="2" stroke="currentColor" strokeWidth="1.5" />
+                            </svg>
+                          </div>
+                          <span>SENTINEL AI</span>
+                        </div>
+                      </span>
+
+                      <div className="relative px-4 py-3 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] rounded-2xl rounded-tl-none shadow-[0_2px_8px_rgba(0,0,0,0.2)] flex items-center gap-1.5">
+                        <span className="absolute top-[-1px] left-[-1px] w-1.5 h-1.5 border-t border-l border-[var(--accent-amber)] rounded-tl-[var(--radius-sm)]" />
+                        <span className="absolute top-[-1px] right-[-1px] w-1.5 h-1.5 border-t border-r border-[var(--accent-amber)] rounded-tr-[var(--radius-sm)]" />
+                        <span className="absolute bottom-[-1px] left-[-1px] w-1.5 h-1.5 border-b border-l border-[var(--accent-amber)] rounded-bl-[var(--radius-sm)]" />
+                        <span className="absolute bottom-[-1px] right-[-1px] w-1.5 h-1.5 border-b border-r border-[var(--accent-amber)] rounded-br-[var(--radius-sm)]" />
+                        
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-[typing-dot-1_1.4s_infinite]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-[typing-dot-2_1.4s_infinite] [animation-delay:0.2s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-[typing-dot-3_1.4s_infinite] [animation-delay:0.4s]" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={bottomRef} />
                 </div>
 
                 {/* Form Chat Input */}
-                <form onSubmit={handleSendChat} className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)] flex gap-3 shrink-0">
+                <form 
+                  onSubmit={handleSendChat} 
+                  className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)] flex items-center gap-3 shrink-0 relative z-10"
+                >
                   <input
+                    ref={chatInputRef}
                     type="text"
                     required
-                    disabled={aiTyping}
                     value={chatInput}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
                     onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask assistant about attack patterns, models or mitigation plans..."
-                    className="flex-1 bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] rounded-[var(--radius-sm)] px-4 py-3 text-xs text-white outline-none placeholder-slate-650 transition-all font-sans"
+                    placeholder="Ask SENTINEL AI..."
+                    className="flex-1 bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] rounded-[var(--radius-sm)] px-4 py-3 text-xs text-white outline-none placeholder-[var(--text-muted)] transition-all font-sans"
                   />
+                  
+                  {inputFocused && (
+                    <span className="text-[9px] text-[var(--text-secondary)] font-mono transition-opacity duration-200 animate-fade-in shrink-0">
+                      Enter ↵ to send
+                    </span>
+                  )}
+                  
                   <GlowButton
                     type="submit"
-                    disabled={aiTyping}
                     variant="primary"
-                    className="px-5 py-3 text-xs font-bold font-sans uppercase tracking-wider min-w-[70px] flex items-center justify-center"
+                    className="px-5 py-3 text-xs font-bold font-sans uppercase tracking-wider min-w-[70px] flex items-center justify-center shrink-0"
                   >
                     Send
                   </GlowButton>

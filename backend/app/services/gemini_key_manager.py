@@ -1,0 +1,51 @@
+import logging
+import threading
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+class GeminiKeyManager:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.keys = settings.GEMINI_API_KEYS
+        if not self.keys:
+            raise ValueError(
+                "CRITICAL STARTUP ERROR: No Gemini API keys found in env variable 'GEMINI_API_KEYS'. "
+                "Please configure at least one key in backend/.env."
+            )
+        self.current_index = 0
+        self.exhausted = set()
+        logger.info(f"Loaded {len(self.keys)} Gemini API keys")
+
+    def get_current_key(self) -> str:
+        with self.lock:
+            # If all keys are exhausted, clear and reset
+            if len(self.exhausted) >= len(self.keys):
+                self.exhausted.clear()
+                self.current_index = 0
+                logger.warning("All Gemini API keys exhausted. Clearing exhausted set and restarting from Key #1.")
+            
+            # Find the next available non-exhausted key starting from current_index
+            for i in range(len(self.keys)):
+                idx = (self.current_index + i) % len(self.keys)
+                key = self.keys[idx]
+                if key not in self.exhausted:
+                    self.current_index = idx
+                    return key
+            
+            # Fallback (should never be reached because of the len check above)
+            return self.keys[self.current_index]
+
+    def mark_exhausted(self, key: str):
+        with self.lock:
+            if key in self.keys and key not in self.exhausted:
+                self.exhausted.add(key)
+                key_num = self.keys.index(key) + 1
+                next_index = (self.current_index + 1) % len(self.keys)
+                self.current_index = next_index
+                next_key_num = next_index + 1
+                logger.warning(f"Key #{key_num} exhausted, switching to Key #{next_key_num}")
+
+    def rotate(self):
+        with self.lock:
+            self.current_index = (self.current_index + 1) % len(self.keys)

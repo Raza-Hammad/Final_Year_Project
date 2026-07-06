@@ -311,12 +311,34 @@ async def predict_flow(
     return result
 
 # Configure Gemini API client
-if settings.GEMINI_API_KEY:
+import google.generativeai as genai
+from app.services.gemini_key_manager import GeminiKeyManager
+
+try:
+    key_manager = GeminiKeyManager()
+    genai.configure(api_key=key_manager.get_current_key())
+except Exception as gem_err:
+    logger.error(f"Failed to initialize Gemini client: {gem_err}")
+
+def is_quota_error(e: Exception) -> bool:
+    err_str = str(e).lower()
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-    except Exception as gem_err:
-        logger.error(f"Failed to configure Gemini client: {gem_err}")
+        from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
+        if isinstance(e, ResourceExhausted):
+            return True
+        if isinstance(e, ServiceUnavailable) and "quota" in err_str:
+            return True
+    except ImportError:
+        pass
+    if hasattr(e, "code"):
+        code = getattr(e, "code")
+        if code == 429:
+            return True
+        if code == 503 and "quota" in err_str:
+            return True
+    if any(term in err_str for term in ["quota", "rate limit", "resource_exhausted", "too many requests"]):
+        return True
+    return False
 
 @app.post("/api/xai/explain")
 async def explain_packet(
@@ -353,8 +375,10 @@ async def explain_packet(
     tier_name = tier_names.get(req.tier, f"Tier {req.tier} Classifier")
 
     explanation = None
-    if settings.GEMINI_API_KEY:
+    if key_manager.keys:
+        current_key = key_manager.get_current_key()
         try:
+            genai.configure(api_key=current_key)
             model = genai.GenerativeModel('gemini-1.5-flash')
             prompt = f"""
             You are a security operations center (SOC) AI analyst.
@@ -376,8 +400,13 @@ async def explain_packet(
                 
             explanation = await loop.run_in_executor(None, call_gemini)
             explanation = explanation.replace("*", "").replace("`", "").strip()
+            key_manager.rotate()
         except Exception as api_err:
-            logger.error(f"Gemini API execution error: {api_err}")
+            if is_quota_error(api_err):
+                logger.warning(f"Quota error in explain endpoint, marking key index {key_manager.keys.index(current_key)} as exhausted.")
+                key_manager.mark_exhausted(current_key)
+            else:
+                logger.error(f"Gemini API execution error: {api_err}")
             explanation = None
 
     if not explanation:
@@ -483,7 +512,7 @@ async def chat_assistant(
         else:
             latest_alert_details = "No alerts have been recorded in the database yet."
 
-        if not settings.GEMINI_API_KEY:
+        if not key_manager.keys:
             return {
                 "answer": f"Here is the details of the latest logged security event:\n{latest_alert_details}",
                 "source": "Rule-Based"
@@ -499,34 +528,72 @@ async def chat_assistant(
                 }
                 
     # 3. Fall back to Gemini API if configured
-    if settings.GEMINI_API_KEY:
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            system_instruction = (
-                "You are a helpful, professional cybersecurity operations center (SOC) AI assistant for this Threat Simulator portal. "
-                "You answer questions ONLY related to cybersecurity, network traffic patterns, machine learning intrusion detection (LightGBM, Random Forest, XGBoost), the 3-tier cascade detector, or general SOC analyst guidelines. "
-                "If the question is off-topic (e.g. cooking, travel, general off-topic chat, non-cybersecurity topics), politely decline to answer, stating that you can only assist with security intelligence for this project."
-            )
+    if key_manager.keys:
+        system_instruction = (
+            "You are a helpful, professional cybersecurity operations center (SOC) AI assistant for this Threat Simulator portal. "
+            "You answer questions ONLY related to cybersecurity, network traffic patterns, machine learning intrusion detection (LightGBM, Random Forest, XGBoost), the 3-tier cascade detector, or general SOC analyst guidelines. "
+            "If the question is off-topic (e.g. cooking, travel, general off-topic chat, non-cybersecurity topics), politely decline to answer, stating that you can only assist with security intelligence for this project."
+        )
+        
+        prompt = f"{system_instruction}\n\n"
+        if latest_alert_details:
+            prompt += f"Context on the latest recorded security threat alert: {latest_alert_details}\n\n"
             
-            prompt = f"{system_instruction}\n\n"
-            if latest_alert_details:
-                prompt += f"Context on the latest recorded security threat alert: {latest_alert_details}\n\n"
+        prompt += f"User message: {user_msg}"
+        
+        MAX_RETRIES = min(10, len(key_manager.keys))
+        last_error = None
+        
+        for attempt in range(MAX_RETRIES):
+            current_key = key_manager.get_current_key()
+            try:
+                genai.configure(api_key=current_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
-            prompt += f"User message: {user_msg}"
-            
-            loop = asyncio.get_running_loop()
-            def call_gemini():
-                res = model.generate_content(prompt)
-                return res.text.strip()
+                loop = asyncio.get_running_loop()
+                def call_gemini():
+                    res = model.generate_content(prompt)
+                    return res.text.strip()
+                    
+                answer = await loop.run_in_executor(None, call_gemini)
+                answer = answer.replace("*", "").replace("`", "").strip()
                 
-            answer = await loop.run_in_executor(None, call_gemini)
-            answer = answer.replace("*", "").replace("`", "").strip()
+                # Success - rotate to spread load evenly
+                key_manager.rotate()
+                
+                return {
+                    "answer": answer,
+                    "source": "AI Gemini"
+                }
+            except Exception as e:
+                if is_quota_error(e):
+                    logger.warning(f"Gemini API quota error on key index {key_manager.keys.index(current_key)}: {e}")
+                    key_manager.mark_exhausted(current_key)
+                    last_error = e
+                    continue  # Try next key instantly
+                else:
+                    logger.error(f"Gemini API non-quota error: {e}")
+                    if is_last_alert_query and latest_alert_details:
+                        return {
+                            "answer": f"Here is the details of the latest logged security event:\n{latest_alert_details}",
+                            "source": "Rule-Based"
+                        }
+                    return {
+                        "answer": "I'm having trouble right now — please try again in a moment.",
+                        "source": "Error Fallback"
+                    }
+                    
+        # All keys exhausted
+        logger.error(f"All Gemini API keys exhausted. Last error: {last_error}")
+        if is_last_alert_query and latest_alert_details:
             return {
-                "answer": answer,
-                "source": "AI Gemini"
+                "answer": f"Here is the details of the latest logged security event:\n{latest_alert_details}",
+                "source": "Rule-Based"
             }
-        except Exception as e:
-            logger.error(f"Gemini API chat invocation failed: {e}")
+        return {
+            "answer": "Our AI is experiencing high demand right now. Your rule-based answers are still available.",
+            "source": "Error Fallback"
+        }
             
     # 4. Fallback response if offline
     if is_last_alert_query and latest_alert_details:
@@ -538,6 +605,22 @@ async def chat_assistant(
     return {
         "answer": "I am currently operating in offline mode. Please ask about the cascade architecture, simulator presets, or specific threat types (DDoS, Port Scan, Brute Force).",
         "source": "Offline Fallback"
+    }
+
+
+@app.get("/api/chat/status")
+def get_chat_status(
+    current_user: User = Depends(get_current_user)
+):
+    """Returns the current operational status of the Gemini hybrid system (Protected)."""
+    keys_total = len(key_manager.keys)
+    keys_exhausted = len(key_manager.exhausted)
+    keys_available = keys_total - keys_exhausted
+    return {
+        "gemini_available": keys_available > 0,
+        "keys_total": keys_total,
+        "keys_available": keys_available,
+        "keys_exhausted": keys_exhausted
     }
 
 
@@ -682,6 +765,25 @@ def get_smote_stats():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to read SMOTE stats: {str(e)}"
+        )
+
+
+@app.get("/api/data/benign-baseline")
+def get_benign_baseline():
+    """Reads and returns the precomputed benign average values for top features."""
+    baseline_path = Path(settings.DATA_CACHE_DIR) / "benign_averages.json"
+    if not baseline_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Benign baseline averages not found."
+        )
+    try:
+        with open(baseline_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to read benign averages: {str(e)}"
         )
 
 
