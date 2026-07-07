@@ -379,7 +379,7 @@ async def explain_packet(
         current_key = key_manager.get_current_key()
         try:
             genai.configure(api_key=current_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             prompt = f"""
             You are a security operations center (SOC) AI analyst.
             Provide exactly one plain-English sentence explaining why this network flow was classified as '{req.predicted_label}' by the ML cascade.
@@ -548,7 +548,7 @@ async def chat_assistant(
             current_key = key_manager.get_current_key()
             try:
                 genai.configure(api_key=current_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 
                 loop = asyncio.get_running_loop()
                 def call_gemini():

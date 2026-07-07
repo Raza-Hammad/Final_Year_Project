@@ -211,6 +211,14 @@ export const Dashboard: React.FC = () => {
   const chatInputRef = useRef<HTMLInputElement>(null);
   const chatQueueRef = useRef<string[]>([]);
   const processingRef = useRef<boolean>(false);
+  const isAtBottomRef = useRef<boolean>(true);
+
+  const handleChatScroll = () => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    isAtBottomRef.current = atBottom;
+  };
 
   // ==========================================
   // 1. WEBSOCKET FEED + THROTTLED RE-RENDERING
@@ -300,9 +308,14 @@ export const Dashboard: React.FC = () => {
             }
             
             const fromY = isAttack ? 45 : 105;
-            const dest_ip = data.dest_ip || '192.168.10.50';
-            const target = dest_ip === '192.168.10.50' ? { x: 410, y: 25 } :
-                           dest_ip === '192.168.10.51' ? { x: 410, y: 70 } : { x: 410, y: 115 };
+            const raw_dest_ip = data.dest_ip || '192.168.10.50';
+            const target = raw_dest_ip === '192.168.10.50' ? { x: 420, y: 30 } :
+                           raw_dest_ip === '192.168.10.51' ? { x: 420, y: 75 } : { x: 420, y: 120 };
+                           
+            const display_dest_ip = raw_dest_ip === '192.168.10.50' ? '192.168.10.10' :
+                                    raw_dest_ip === '192.168.10.51' ? '192.168.10.20' : '192.168.10.30';
+                                    
+            const display_src_ip = isAttack ? '203.0.113.45' : '192.168.10.50';
                            
             newVectors.push({
               id: Math.random().toString(36).substr(2, 9),
@@ -313,8 +326,8 @@ export const Dashboard: React.FC = () => {
               label,
               isAttack,
               severity: data.severity || 'Info',
-              source_ip: data.source_ip || (isAttack ? '10.0.0.15' : '192.168.10.150'),
-              dest_ip,
+              source_ip: display_src_ip,
+              dest_ip: display_dest_ip,
               source_port: data.source_port || 0,
               dest_port: data.dest_port || 0,
               confidence: data.confidence || 0.95,
@@ -362,15 +375,30 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   // Smart scrolling logic for chatbot
+  const lastActiveTabRef = useRef(activeTab);
+
   useEffect(() => {
+    if (activeTab !== 'ai') {
+      lastActiveTabRef.current = activeTab;
+      return;
+    }
     const container = chatContainerRef.current;
     if (!container) return;
-    // Smart scroll: only scroll if user is near bottom
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-    if (isNearBottom) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+    const tabJustSwitched = lastActiveTabRef.current !== 'ai';
+    lastActiveTabRef.current = activeTab;
+
+    const lastMsgIsUser = messages.length > 0 && messages[messages.length - 1].role === 'user';
+
+    if (tabJustSwitched || lastMsgIsUser || isAtBottomRef.current) {
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // Reset to true after auto-scrolling
+        isAtBottomRef.current = true;
+      }, 50);
     }
-  }, [messages, aiTyping]);
+  }, [messages, aiTyping, activeTab]);
+
 
   // Poll Gemini status
   useEffect(() => {
@@ -405,10 +433,10 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Poll simulator status when in simulator tab
+  // Poll simulator status when in simulator or live tab
   useEffect(() => {
     let interval: number;
-    if (activeTab === 'simulator') {
+    if (activeTab === 'simulator' || activeTab === 'live') {
       fetchSimStatus();
       interval = window.setInterval(fetchSimStatus, 1000);
     }
@@ -670,29 +698,26 @@ export const Dashboard: React.FC = () => {
   }, [liveEvents]);
 
   const postureStatus = React.useMemo(() => {
-    if (postureScore <= 20) {
+    if (postureScore <= 30) {
       return {
-        label: 'Secure',
+        label: 'SECURE',
         color: 'text-emerald-400',
-        bg: 'bg-emerald-950/20 border-emerald-500/20',
-        barColor: '#10b981',
-        description: 'Operational: baseline traffic calm.'
+        dotColor: 'bg-emerald-400',
+        description: 'No significant threats detected.'
       };
     } else if (postureScore <= 60) {
       return {
-        label: 'Elevated Risk',
+        label: 'ELEVATED',
         color: 'text-amber-400',
-        bg: 'bg-amber-950/20 border-amber-500/20',
-        barColor: '#f59e0b',
-        description: 'Moderate threat anomalies detected.'
+        dotColor: 'bg-amber-400',
+        description: 'Moderate attack activity detected.'
       };
     } else {
       return {
-        label: 'Under Attack',
-        color: 'text-red-400 font-bold tracking-wider animate-pulse',
-        bg: 'bg-red-950/20 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.07)]',
-        barColor: '#ef4444',
-        description: 'CRITICAL: sustained threat cascades triggered!'
+        label: 'UNDER ATTACK',
+        color: 'text-red-400 font-bold tracking-wider',
+        dotColor: 'bg-red-400 animate-pulse',
+        description: 'Sustained critical threat cascade active.'
       };
     }
   }, [postureScore]);
@@ -964,99 +989,95 @@ export const Dashboard: React.FC = () => {
               {/* SECURITY POSTURE GAUGE & LIVE ATTACK MAP PANEL */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
                 {/* 1. Security Posture Gauge */}
-                <GlowPanel className="flex flex-col items-center justify-between h-[230px] relative overflow-hidden p-5">
-                  <div className="w-full flex justify-between items-center pb-2 border-b border-[var(--border-subtle)]">
+                <GlowPanel className="flex flex-col items-center justify-between h-[230px] relative overflow-hidden p-4 pb-0">
+                  <div className="w-full flex justify-between items-center pb-2 border-b border-[var(--border-subtle)] shrink-0">
                     <h3 className="text-xs font-bold text-white tracking-wide uppercase font-display">Threat Posture Index</h3>
                     <span className="text-[8px] font-mono text-[var(--text-secondary)] uppercase">2 Min Window</span>
                   </div>
                   
-                  <div className="flex-1 flex flex-col items-center justify-center mt-2">
-                    <svg width="200" height="110" viewBox="0 0 200 110" className="overflow-visible">
+                  <div className="flex-1 flex flex-col items-center justify-center mt-1.5">
+                    <svg width="150" height="82" viewBox="0 0 200 110" className="overflow-visible">
                       <defs>
                         <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="var(--color-calm)" />
-                          <stop offset="35%" stopColor="var(--color-medium)" />
-                          <stop offset="70%" stopColor="var(--color-high)" />
-                          <stop offset="100%" stopColor="var(--color-critical)" />
+                          <stop offset="0%" stopColor="#22C55E" />
+                          <stop offset="50%" stopColor="#F5A623" />
+                          <stop offset="100%" stopColor="#EF4444" />
                         </linearGradient>
-                        <radialGradient id="pivotHubGrad" cx="30%" cy="30%" r="70%">
-                          <stop offset="0%" stopColor="#ffffff" />
-                          <stop offset="40%" stopColor="var(--accent-amber)" />
-                          <stop offset="100%" stopColor="#875200" />
-                        </radialGradient>
                       </defs>
-                      {/* Grey background track */}
+                      {/* Gradient background track (dormant path) */}
                       <path
                         d="M20,100 A80,80 0 0,1 180,100"
                         fill="none"
-                        stroke="var(--bg-panel-raised)"
-                        strokeWidth="10"
+                        stroke="url(#gaugeGradient)"
+                        strokeWidth="14"
                         strokeLinecap="round"
+                        opacity="0.25"
                       />
                       {/* Gradient active progress track */}
                       <path
                         d="M20,100 A80,80 0 0,1 180,100"
                         fill="none"
                         stroke="url(#gaugeGradient)"
-                        strokeWidth="10"
+                        strokeWidth="14"
                         strokeLinecap="round"
                         strokeDasharray="251.3"
                         strokeDashoffset={251.3 - (251.3 * postureScore) / 100}
                         className="transition-all duration-700 ease-out"
+                        style={{ filter: 'drop-shadow(0 0 3px var(--accent-amber))' }}
                       />
                       
-                      {/* Subtle instrument radial tick marks at 0%, 25%, 50%, 75%, 100% */}
+                      {/* Subtle instrument radial tick marks outside the arc */}
                       {[-90, -45, 0, 45, 90].map((angle, idx) => (
                         <line
                           key={idx}
                           x1="100"
-                          y1="20"
+                          y1="9"
                           x2="100"
-                          y2="14"
+                          y2="3"
                           stroke="var(--text-secondary)"
                           strokeWidth="1"
-                          opacity="0.35"
+                          opacity="0.5"
                           transform={`rotate(${angle}, 100, 100)`}
                         />
                       ))}
                       
-                      {/* Speedometer Needle (thin, sharp, glows slightly, transitions smoothly) */}
-                      <line
-                        x1="100"
-                        y1="100"
-                        x2="100"
-                        y2="28"
-                        stroke="var(--accent-amber)"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        style={{ 
-                          transformOrigin: '100px 100px',
-                          transform: `rotate(${-90 + (postureScore / 100) * 180}deg)`,
-                          transition: 'transform 0.8s ease-in-out',
-                          filter: 'drop-shadow(0 0 2px var(--accent-amber))'
-                        }}
-                      />
-                      
-                      {/* Needle Center Pin (Hub) - 3D spherical rendering */}
-                      <circle cx="100" cy="100" r="4" fill="url(#pivotHubGrad)" stroke="rgba(0, 0, 0, 0.4)" strokeWidth="0.5" />
+                      {/* Speedometer Needle & Hub in center-bottom pivot group */}
+                      <g transform="translate(100, 100)">
+                        <line
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="-72"
+                          stroke="var(--accent-amber)"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          style={{ 
+                            transformOrigin: '0px 0px',
+                            transform: `rotate(${-90 + (postureScore / 100) * 180}deg)`,
+                            transition: 'transform 0.8s ease-in-out',
+                            filter: 'drop-shadow(0 0 2px var(--accent-amber))'
+                          }}
+                        />
+                        <circle cx="0" cy="0" r="5" fill="var(--accent-amber)" />
+                      </g>
                     </svg>
 
                     {/* Numeric Score Overlay (positioned clearly below the pivot hub) */}
-                    <div className="text-center mt-3.5 z-10">
-                      <p className="text-2xl font-black text-white tracking-tight leading-none font-mono">{postureScore}%</p>
-                      <span className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold font-sans mt-0.5 block">Risk Index</span>
+                    <div className="text-center mt-1.5 z-10">
+                      <p className="text-xl font-black text-white tracking-tight leading-none font-mono">{postureScore}%</p>
+                      <span className="text-[7.5px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold font-sans mt-0.5 block">Risk Index</span>
                     </div>
                   </div>
 
                   {/* Status Indicator Bar */}
-                  <div className={`w-full flex items-center justify-between px-3 py-1.5 border rounded-lg ${postureStatus.bg} transition-all duration-500 mt-2 shrink-0`}>
+                  <div className="w-[calc(100%+32px)] mx-[-16px] flex items-center justify-between px-4 min-h-[36px] bg-[var(--bg-panel-raised)] border-t border-[var(--border-subtle)] transition-all duration-500 mt-auto shrink-0">
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full bg-current ${postureStatus.color}`} />
-                      <span className={`text-[9px] font-extrabold uppercase ${postureStatus.color}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${postureStatus.dotColor}`} />
+                      <span className={`text-[9px] font-bold uppercase ${postureStatus.color}`}>
                         {postureStatus.label}
                       </span>
                     </div>
-                    <span className="text-[8px] text-[var(--text-secondary)] font-medium truncate max-w-[130px]">
+                    <span className="text-[8px] text-[var(--text-secondary)] font-body truncate ml-4">
                       {postureStatus.description}
                     </span>
                   </div>
@@ -1112,15 +1133,33 @@ export const Dashboard: React.FC = () => {
                           75% { opacity: 1; }
                           100% { opacity: 0; }
                         }
+                        @keyframes standby-pulse {
+                          0%, 100% { opacity: 0.01; }
+                          50% { opacity: 0.4; }
+                        }
+                        .standby-text {
+                          animation: standby-pulse 3s infinite ease-in-out;
+                        }
+                        .target-node-circle {
+                          transition: all 0.3s ease;
+                          stroke: var(--border-subtle);
+                          stroke-width: 1.5px;
+                          fill: var(--bg-panel-raised);
+                        }
+                        .target-node-circle:hover {
+                          stroke: var(--accent-amber);
+                          filter: drop-shadow(0 0 5px var(--accent-amber));
+                          cursor: pointer;
+                        }
                       `}} />
 
                       {/* 1. Draw static topological connections as background mesh */}
-                      <path d="M 50 45 Q 230 20 410 25" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 45 Q 230 60 410 70" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 45 Q 230 80 410 115" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 105 Q 230 70 410 25" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 105 Q 230 90 410 70" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                      <path d="M 50 105 Q 230 110 410 115" fill="none" stroke="var(--bg-panel-raised)" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+                      <path d="M 50 45 Q 235 25 420 30" fill="none" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="2 2" opacity={activeVectors.length > 0 ? 0.04 : 0.15} className="transition-all duration-700" />
+                      <path d="M 50 45 Q 235 60 420 75" fill="none" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="2 2" opacity={activeVectors.length > 0 ? 0.04 : 0.15} className="transition-all duration-700" />
+                      <path d="M 50 45 Q 235 90 420 120" fill="none" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="2 2" opacity={activeVectors.length > 0 ? 0.04 : 0.15} className="transition-all duration-700" />
+                      <path d="M 50 105 Q 235 60 420 30" fill="none" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="2 2" opacity={activeVectors.length > 0 ? 0.04 : 0.15} className="transition-all duration-700" />
+                      <path d="M 50 105 Q 235 90 420 75" fill="none" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="2 2" opacity={activeVectors.length > 0 ? 0.04 : 0.15} className="transition-all duration-700" />
+                      <path d="M 50 105 Q 235 120 420 120" fill="none" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="2 2" opacity={activeVectors.length > 0 ? 0.04 : 0.15} className="transition-all duration-700" />
 
                       {/* 2. Left Node Group: Source Pools */}
                       {/* Attacker Node Pool */}
@@ -1139,6 +1178,7 @@ export const Dashboard: React.FC = () => {
                       <circle cx="50" cy="45" r="12" stroke="var(--color-critical)" strokeWidth="1.5" fill="rgba(239, 68, 68, 0.15)" />
                       <text x="50" y="48" fill="var(--color-critical)" fontSize="7" textAnchor="middle" fontWeight="bold" className="font-mono select-none">ATK</text>
                       <text x="50" y="24" fill="var(--color-critical)" fontSize="7.5" textAnchor="middle" fontWeight="bold" className="select-none uppercase tracking-wider font-sans">Attacker Pool</text>
+                      <text x="50" y="32" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">203.0.113.45</text>
 
                       {/* Client Node Pool */}
                       <circle 
@@ -1154,28 +1194,29 @@ export const Dashboard: React.FC = () => {
                       <circle cx="50" cy="105" r="10" stroke="var(--color-calm)" strokeWidth="1.5" fill="rgba(45, 212, 191, 0.12)" />
                       <text x="50" y="108" fill="var(--color-calm)" fontSize="7" textAnchor="middle" fontWeight="bold" className="font-mono select-none">USR</text>
                       <text x="50" y="126" fill="var(--color-calm)" fontSize="7.5" textAnchor="middle" fontWeight="bold" className="select-none uppercase tracking-wider font-sans">Clients (Benign)</text>
+                      <text x="50" y="134" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.50</text>
 
                       {/* 3. Internal Network Boundary (Right) */}
                       <rect x="320" y="8" width="170" height="138" rx="6" fill="none" stroke="var(--border-subtle)" strokeWidth="1" strokeDasharray="3 3" />
                       <text x="405" y="20" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" fontWeight="bold" letterSpacing="1.5" className="select-none font-sans uppercase opacity-60">INTERNAL LAN</text>
 
                       {/* Web Server Node */}
-                      <circle cx="410" cy="25" r="10" stroke="var(--border-subtle)" strokeWidth="1.5" fill="var(--bg-panel-raised)" />
-                      <text x="410" y="28" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">WS</text>
-                      <text x="410" y="44" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">Web Server</text>
-                      <text x="410" y="52" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.50</text>
+                      <circle cx="420" cy="30" r="10" className="target-node-circle" />
+                      <text x="420" y="33" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">WS</text>
+                      <text x="420" y="49" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">Web Server</text>
+                      <text x="420" y="57" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.10</text>
 
                       {/* DB Server Node */}
-                      <circle cx="410" cy="70" r="10" stroke="var(--border-subtle)" strokeWidth="1.5" fill="var(--bg-panel-raised)" />
-                      <text x="410" y="73" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">DB</text>
-                      <text x="410" y="89" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">DB Server</text>
-                      <text x="410" y="97" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.51</text>
+                      <circle cx="420" cy="75" r="10" className="target-node-circle" />
+                      <text x="420" y="78" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">DB</text>
+                      <text x="420" y="94" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">DB Server</text>
+                      <text x="420" y="102" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.20</text>
 
                       {/* Workstation Node */}
-                      <circle cx="410" cy="115" r="10" stroke="var(--border-subtle)" strokeWidth="1.5" fill="var(--bg-panel-raised)" />
-                      <text x="410" y="118" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">PC</text>
-                      <text x="410" y="134" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">Workstation</text>
-                      <text x="410" y="142" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.100</text>
+                      <circle cx="420" cy="120" r="10" className="target-node-circle" />
+                      <text x="420" y="123" fill="var(--text-primary)" fontSize="7" fontWeight="bold" className="font-mono select-none" textAnchor="middle">PC</text>
+                      <text x="420" y="139" fill="var(--text-primary)" fontSize="7.5" textAnchor="middle" fontWeight="semibold" className="select-none font-sans">Workstation</text>
+                      <text x="420" y="147" fill="var(--text-secondary)" fontSize="6" textAnchor="middle" className="font-mono select-none">192.168.10.30</text>
 
                       {/* 4. Active flow vectors mapping */}
                       {activeVectors.map((vec, index) => {
@@ -1282,9 +1323,9 @@ export const Dashboard: React.FC = () => {
                     )}
 
                     {/* Threat Map overlay */}
-                    {activeVectors.length === 0 && (
+                    {liveEvents.length === 0 && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10">
-                        <span className="text-[9px] text-[var(--text-secondary)] font-mono tracking-wider uppercase animate-pulse">
+                        <span className="text-[10px] text-[var(--text-secondary)] font-body tracking-wider uppercase standby-text font-bold">
                           Awaiting Ingress Stream Telemetry...
                         </span>
                       </div>
@@ -1318,7 +1359,7 @@ export const Dashboard: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <span className="text-[7px] text-[var(--accent-amber)] font-bold animate-pulse uppercase tracking-wider font-display">Live Attack Monitor</span>
+                    <span className="text-[6.5px] text-[var(--text-secondary)] font-bold uppercase font-body">Live Attack Monitor</span>
                   </div>
                 </GlowPanel>
               </div>
@@ -2235,6 +2276,7 @@ export const Dashboard: React.FC = () => {
                 {/* Message Log */}
                 <div 
                   ref={chatContainerRef}
+                  onScroll={handleChatScroll}
                   className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--bg-base)] relative overflow-hidden flex flex-col"
                 >
                   <RadarBackground isFixed={false} className="opacity-[0.05]" />
