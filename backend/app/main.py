@@ -531,8 +531,10 @@ async def chat_assistant(
     if key_manager.keys:
         system_instruction = (
             "You are a helpful, professional cybersecurity operations center (SOC) AI assistant for this Threat Simulator portal. "
-            "You answer questions ONLY related to cybersecurity, network traffic patterns, machine learning intrusion detection (LightGBM, Random Forest, XGBoost), the 3-tier cascade detector, or general SOC analyst guidelines. "
-            "If the question is off-topic (e.g. cooking, travel, general off-topic chat, non-cybersecurity topics), politely decline to answer, stating that you can only assist with security intelligence for this project."
+            "You answer questions related to cybersecurity, network traffic patterns, machine learning intrusion detection (LightGBM, Random Forest, XGBoost), the 3-tier cascade detector, or general SOC analyst guidelines. "
+            "If the question is off-topic (e.g. cooking, travel, general off-topic chat, non-cybersecurity topics), politely decline to answer using the following professional analyst response or a very similar tone:\n"
+            "\"My operational scope covers cybersecurity threats, network intrusion analysis, the THREATSIM detection system, and SOC analyst workflows. For [topic], I'd recommend a general-purpose AI. How can I help with your security analysis?\"\n"
+            "Substitute [topic] with the actual off-topic subject mentioned by the user."
         )
         
         prompt = f"{system_instruction}\n\n"
@@ -995,11 +997,25 @@ def export_alerts(
 @app.get("/api/simulate")
 def simulate_endpoint(current_user: User = Depends(get_current_user)):
     """Returns status indicator for the simulation flow engine (Protected)."""
+    from app.simulator.simulator import SCENARIOS
     return {
         "status": "ready",
-        "active_scenarios": ["ddos_storm", "port_scan", "brute_force", "mixed_attack", "benign_baseline"],
+        "active_scenarios": list(SCENARIOS.keys()),
         "triggered_by": current_user.username,
         "analyst_role": current_user.role
+    }
+
+@app.get("/api/simulate/scenarios")
+def get_simulate_scenarios(current_user: User = Depends(get_current_user)):
+    """Returns the dictionary of configured scenarios (Protected)."""
+    from app.simulator.simulator import SCENARIOS
+    return {
+        sc_id: {
+            "display_name": info["display_name"],
+            "description": info["description"],
+            "severity_hint": info["severity_hint"]
+        }
+        for sc_id, info in SCENARIOS.items()
     }
 
 @app.post("/api/simulate/start")
@@ -1007,11 +1023,17 @@ async def simulate_start(
     req: SimulateStartRequest,
     current_user: User = Depends(get_current_user)
 ):
-    """Starts a safe data-replay simulation scenario at a given packets/sec rate (Protected)."""
     if req.rate <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Simulation rate must be at least 1 packet per second."
+        )
+    from app.simulator.simulator import SCENARIOS
+    valid_ids = list(SCENARIOS.keys()) + ["ddos_storm"]
+    if req.scenario not in valid_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid scenario: {req.scenario}. Must be one of {list(SCENARIOS.keys())}"
         )
     try:
         simulator_engine.start(req.scenario, req.rate, req.duration_seconds)

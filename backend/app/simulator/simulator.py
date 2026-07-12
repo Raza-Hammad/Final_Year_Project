@@ -13,6 +13,70 @@ from app.ml.metadata_helper import get_raw_flow_metadata
 
 logger = logging.getLogger(__name__)
 
+# Global scenario registry mapped to dataset labels
+SCENARIOS = {
+    "dos": {
+        "display_name": "DoS Attack",
+        "labels": ["DoS Hulk", "DoS GoldenEye", "DoS slowloris", "DoS Slowhttptest"],
+        "description": "Floods a target with traffic to exhaust its resources.",
+        "severity_hint": "Critical"
+    },
+    "ddos": {
+        "display_name": "DDoS Attack",
+        "labels": ["DDoS"],
+        "description": "Distributed flood from multiple sources overwhelming the target.",
+        "severity_hint": "Critical"
+    },
+    "brute_force": {
+        "display_name": "Brute Force",
+        "labels": ["FTP-Patator", "SSH-Patator"],
+        "description": "Repeated login attempts to crack credentials.",
+        "severity_hint": "High"
+    },
+    "web_attacks": {
+        "display_name": "Web Attacks",
+        "labels": ["Web Attack - Brute Force", "Web Attack - Sql Injection", "Web Attack - XSS"],
+        "description": "SQL injection, XSS, and web brute-force exploits.",
+        "severity_hint": "High"
+    },
+    "port_scan": {
+        "display_name": "Port Scan",
+        "labels": ["PortScan"],
+        "description": "Systematically probes open ports to map the network.",
+        "severity_hint": "Medium"
+    },
+    "bot": {
+        "display_name": "Botnet Activity",
+        "labels": ["Bot"],
+        "description": "Automated malicious bot communicating with a command server.",
+        "severity_hint": "Critical"
+    },
+    "infiltration": {
+        "display_name": "Infiltration",
+        "labels": ["Infiltration"],
+        "description": "Stealthy internal lateral movement after initial compromise.",
+        "severity_hint": "Critical"
+    },
+    "heartbleed": {
+        "display_name": "Heartbleed",
+        "labels": ["Heartbleed"],
+        "description": "Exploits OpenSSL vulnerability to leak server memory contents.",
+        "severity_hint": "Critical"
+    },
+    "mixed_attack": {
+        "display_name": "Mixed Attack",
+        "labels": ["Bot", "DDoS", "DoS GoldenEye", "DoS Hulk", "DoS Slowhttptest", "DoS slowloris", "FTP-Patator", "Heartbleed", "Infiltration", "PortScan", "SSH-Patator", "Web Attack - Brute Force", "Web Attack - Sql Injection", "Web Attack - XSS"],
+        "description": "Multi-vector attack combining all threat types simultaneously.",
+        "severity_hint": "Critical"
+    },
+    "benign_baseline": {
+        "display_name": "Benign Baseline",
+        "labels": ["BENIGN"],
+        "description": "Normal network traffic with no malicious activity.",
+        "severity_hint": "Info"
+    }
+}
+
 class SimulationEngine:
     """Safely simulates network traffic threat streams by replaying CIC-IDS2017 test dataset rows."""
     def __init__(self):
@@ -65,25 +129,27 @@ class SimulationEngine:
                 self.label_to_indices[label_name] = np.where(self.y_test == class_idx)[0]
                 logger.info(f"Scenario mapping: Found {len(self.label_to_indices[label_name])} samples for '{label_name}'")
             
-            # Group classes into scenario presets
-            self.scenarios = {
-                "benign_baseline": self.label_to_indices.get("BENIGN", np.array([])),
-                "ddos_storm": np.concatenate([
-                    self.label_to_indices.get(lbl, np.array([]))
-                    for lbl in ["DDoS", "DoS Hulk", "DoS GoldenEye", "DoS slowloris", "DoS Slowhttptest"]
-                    if lbl in self.label_to_indices
-                ]),
-                "port_scan": self.label_to_indices.get("PortScan", np.array([])),
-                "brute_force": np.concatenate([
-                    self.label_to_indices.get(lbl, np.array([]))
-                    for lbl in ["FTP-Patator", "SSH-Patator", "Web Attack - Brute Force"]
-                    if lbl in self.label_to_indices
-                ]),
-            }
-            
             # Index of BENIGN class to distinguish attacks in mixed scenario
-            benign_class_idx = list(self.classes).index("BENIGN")
-            self.all_attack_indices = np.where(self.y_test != benign_class_idx)[0]
+            try:
+                benign_class_idx = list(self.classes).index("BENIGN")
+                self.all_attack_indices = np.where(self.y_test != benign_class_idx)[0]
+            except ValueError:
+                self.all_attack_indices = np.array([], dtype=int)
+            
+            # Group classes into scenario presets
+            self.scenarios = {}
+            for sc_id, sc_info in SCENARIOS.items():
+                if sc_id == "mixed_attack":
+                    self.scenarios[sc_id] = self.all_attack_indices
+                else:
+                    indices_list = []
+                    for lbl in sc_info["labels"]:
+                        if lbl in self.label_to_indices:
+                            indices_list.append(self.label_to_indices[lbl])
+                    if indices_list:
+                        self.scenarios[sc_id] = np.concatenate(indices_list)
+                    else:
+                        self.scenarios[sc_id] = np.array([], dtype=int)
             
             for preset_name, indices in self.scenarios.items():
                 logger.info(f"Scenario preset '{preset_name}' mapped to {len(indices)} threat rows.")
@@ -102,9 +168,16 @@ class SimulationEngine:
         if self.is_running:
             raise ValueError("Simulation is already running. Stop it first.")
             
-        valid_scenarios = ["ddos_storm", "port_scan", "brute_force", "mixed_attack", "benign_baseline"]
-        if scenario not in valid_scenarios:
-            raise ValueError(f"Invalid scenario name: {scenario}. Must be one of {valid_scenarios}")
+        # Legacy scenario mapping
+        if scenario == "ddos_storm":
+            scenario = "ddos"
+            
+        if scenario not in SCENARIOS:
+            raise ValueError(f"Unknown scenario: {scenario}")
+            
+        source_indices = self.scenarios.get(scenario, np.array([]))
+        if len(source_indices) == 0:
+            raise ValueError(f"No test data found for scenario: {scenario}. Re-run the data pipeline.")
             
         self.is_running = True
         self.current_scenario = scenario
@@ -157,6 +230,20 @@ class SimulationEngine:
             
             interval = 1.0 / self.rate
             
+            # Local copies for iteration of low-sample count scenarios
+            low_sample_indices = None
+            low_sample_cursor = 0
+            
+            def get_next_low_sample_idx(indices):
+                nonlocal low_sample_indices, low_sample_cursor
+                if low_sample_indices is None or low_sample_cursor >= len(low_sample_indices):
+                    low_sample_indices = indices.copy()
+                    np.random.shuffle(low_sample_indices)
+                    low_sample_cursor = 0
+                idx = low_sample_indices[low_sample_cursor]
+                low_sample_cursor += 1
+                return int(idx)
+            
             while self.is_running:
                 # 1. Select index list matching scenario
                 if self.current_scenario == "mixed_attack":
@@ -172,8 +259,11 @@ class SimulationEngine:
                     logger.warning(f"No source rows found for scenario '{self.current_scenario}'. Replaying benign baseline.")
                     source_indices = self.scenarios["benign_baseline"]
                     
-                # 2. Pick a random row index with replacement
-                idx = int(np.random.choice(source_indices))
+                # 2. Pick a row index (sequentially shuffled if low-sample, else randomly chosen)
+                if self.current_scenario != "mixed_attack" and len(source_indices) < 50:
+                    idx = get_next_low_sample_idx(source_indices)
+                else:
+                    idx = int(np.random.choice(source_indices))
                 
                 # 3. Extract scaled vector and unscale to reconstruct human-readable values
                 scaled_row = self.X_test[idx]

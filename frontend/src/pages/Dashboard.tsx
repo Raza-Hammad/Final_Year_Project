@@ -15,7 +15,6 @@ import {
   User as UserIcon,
   Play,
   Square,
-  Clock,
   ArrowRight,
   Sparkles,
   Search,
@@ -24,7 +23,18 @@ import {
   ChevronRight,
   Sliders,
   Download,
-  Lock as LockIcon
+  Lock as LockIcon,
+  Zap,
+  Radio,
+  Code,
+  ScanLine,
+  Bug,
+  EyeOff,
+  Heart,
+  Layers,
+  ShieldCheck,
+  Crosshair,
+  Send
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -109,6 +119,136 @@ interface SimStatus {
   tier_breakdown: Record<string, number>;
 }
 
+const getScenarioIcon = (id: string) => {
+  switch (id) {
+    case 'dos':
+      return Zap;
+    case 'ddos':
+      return Radio;
+    case 'brute_force':
+      return LockIcon;
+    case 'web_attacks':
+      return Code;
+    case 'port_scan':
+      return ScanLine;
+    case 'bot':
+      return Bug;
+    case 'infiltration':
+      return EyeOff;
+    case 'heartbleed':
+      return Heart;
+    case 'mixed_attack':
+      return Layers;
+    case 'benign_baseline':
+      return ShieldCheck;
+    default:
+      return Sliders;
+  }
+};
+
+const SCENARIO_DETAILS: Record<string, { type: string, tier: string, vector: string, severity: string, color: string, bg: string, border: string, glow: string }> = {
+  dos: {
+    type: "Network",
+    tier: "Mostly T-1",
+    vector: "Floods target systems with malformed packets to consume CPU/memory resources.",
+    severity: "Critical",
+    color: "var(--color-critical)",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.2)",
+    glow: "rgba(239, 68, 68, 0.3)"
+  },
+  ddos: {
+    type: "Network",
+    tier: "Mostly T-1",
+    vector: "Uses distributed botnet nodes to overwhelm bandwidth capacity.",
+    severity: "Critical",
+    color: "var(--color-critical)",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.2)",
+    glow: "rgba(239, 68, 68, 0.3)"
+  },
+  brute_force: {
+    type: "Application",
+    tier: "Mostly T-1",
+    vector: "Systematically tests username/password combinations over FTP or SSH.",
+    severity: "High",
+    color: "var(--color-high)",
+    bg: "rgba(249, 115, 22, 0.08)",
+    border: "rgba(249, 115, 22, 0.2)",
+    glow: "rgba(249, 115, 22, 0.3)"
+  },
+  web_attacks: {
+    type: "Exploit",
+    tier: "Mixed T-1/T-2",
+    vector: "Injects malicious SQL queries or XSS scripts to compromise web databases.",
+    severity: "High",
+    color: "var(--color-high)",
+    bg: "rgba(249, 115, 22, 0.08)",
+    border: "rgba(249, 115, 22, 0.2)",
+    glow: "rgba(249, 115, 22, 0.3)"
+  },
+  port_scan: {
+    type: "Recon",
+    tier: "Mostly T-1",
+    vector: "Scans target ports to identify open network entry points and running services.",
+    severity: "Medium",
+    color: "var(--color-medium)",
+    bg: "rgba(245, 166, 35, 0.08)",
+    border: "rgba(245, 166, 35, 0.2)",
+    glow: "rgba(245, 166, 35, 0.3)"
+  },
+  bot: {
+    type: "Application",
+    tier: "Mostly T-1",
+    vector: "Establishes unauthorized Command & Control (C2) communication channels.",
+    severity: "Critical",
+    color: "var(--color-critical)",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.2)",
+    glow: "rgba(239, 68, 68, 0.3)"
+  },
+  infiltration: {
+    type: "Exploit",
+    tier: "Mixed T-1/T-2/T-3",
+    vector: "Exploits system vulnerabilities to gain internal footholds and move laterally.",
+    severity: "Critical",
+    color: "var(--color-critical)",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.2)",
+    glow: "rgba(239, 68, 68, 0.3)"
+  },
+  heartbleed: {
+    type: "Exploit",
+    tier: "Mostly T-1",
+    vector: "Exploits CVE-2014-0160 in OpenSSL — leaks up to 64KB of server memory per request.",
+    severity: "Critical",
+    color: "var(--color-critical)",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.2)",
+    glow: "rgba(239, 68, 68, 0.3)"
+  },
+  mixed_attack: {
+    type: "Network",
+    tier: "Mixed T-1/T-2/T-3",
+    vector: "Combines reconnaissance, exploitation, and flooding in a multi-vector attack campaign.",
+    severity: "Critical",
+    color: "var(--color-critical)",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.2)",
+    glow: "rgba(239, 68, 68, 0.3)"
+  },
+  benign_baseline: {
+    type: "Nominal",
+    tier: "None",
+    vector: "Generates normal, nominal user traffic with no malicious components.",
+    severity: "Info",
+    color: "var(--color-calm)",
+    bg: "rgba(45, 212, 191, 0.08)",
+    border: "rgba(45, 212, 191, 0.2)",
+    glow: "rgba(45, 212, 191, 0.3)"
+  }
+};
+
 export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'live' | 'simulator' | 'history' | 'insights' | 'ai'>('live');
@@ -173,9 +313,13 @@ export const Dashboard: React.FC = () => {
     attacks_detected: 0,
     tier_breakdown: { '1': 0, '2': 0, '3': 0 }
   });
-  const [selectedScenario, setSelectedScenario] = useState('ddos_storm');
+  const [selectedScenario, setSelectedScenario] = useState('benign_baseline');
+  const [scenarios, setScenarios] = useState<Record<string, { display_name: string; description: string; severity_hint: string }> | null>(null);
+  const [loadingScenarios, setLoadingScenarios] = useState(true);
   const [simRate, setSimRate] = useState(5);
   const [simDuration, setSimDuration] = useState(30);
+  const [ppsHistory, setPpsHistory] = useState<number[]>(Array(20).fill(0));
+  const [localElapsed, setLocalElapsed] = useState(0);
 
   // --- ALERT HISTORY STATES ---
   const [alerts, setAlerts] = useState<AlertLog[]>([]);
@@ -442,6 +586,60 @@ export const Dashboard: React.FC = () => {
     }
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  // Load scenarios dynamically on mount
+  useEffect(() => {
+    const fetchScenarios = async () => {
+      try {
+        setLoadingScenarios(true);
+        const res = await api.get('/api/simulate/scenarios');
+        setScenarios(res.data);
+        const keys = Object.keys(res.data);
+        if (keys.length > 0 && !keys.includes(selectedScenario)) {
+          setSelectedScenario(keys.includes('benign_baseline') ? 'benign_baseline' : keys[0]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch simulator scenarios:', err);
+      } finally {
+        setLoadingScenarios(false);
+      }
+    };
+    fetchScenarios();
+  }, []);
+
+  // Track real-time packages per second history for mini waveform
+  useEffect(() => {
+    if (simStatus.running) {
+      setPpsHistory(prev => {
+        const next = [...prev.slice(1), packetsPerSecond];
+        return next;
+      });
+    } else {
+      setPpsHistory(Array(20).fill(0));
+    }
+  }, [packetsPerSecond, simStatus.running]);
+
+  // Local elapsed time counter for smooth counting
+  useEffect(() => {
+    let timer: any = null;
+    if (simStatus.running) {
+      setLocalElapsed(simStatus.elapsed_seconds || 0);
+      timer = setInterval(() => {
+        setLocalElapsed(prev => prev + 1);
+      }, 1000);
+    } else {
+      setLocalElapsed(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [simStatus.running]);
+
+  useEffect(() => {
+    if (simStatus.running) {
+      setLocalElapsed(simStatus.elapsed_seconds);
+    }
+  }, [simStatus.elapsed_seconds, simStatus.running]);
 
   const handleStartSim = async () => {
     try {
@@ -842,6 +1040,49 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex font-sans select-none overflow-hidden h-screen relative">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes glow-pulse {
+          0%, 100% { opacity: 0.6; filter: drop-shadow(0 0 2px var(--glow-color)) drop-shadow(0 0 6px var(--glow-color)); }
+          50% { opacity: 1.0; filter: drop-shadow(0 0 4px var(--glow-color)) drop-shadow(0 0 12px var(--glow-color)); }
+        }
+        @keyframes border-glow-pulse-critical {
+          0%, 100% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.6); }
+          50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.45); border-color: rgba(239, 68, 68, 1); }
+        }
+        @keyframes border-glow-pulse-high {
+          0%, 100% { box-shadow: 0 0 4px rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.6); }
+          50% { box-shadow: 0 0 14px rgba(249, 115, 22, 0.45); border-color: rgba(249, 115, 22, 1); }
+        }
+        @keyframes border-glow-pulse-medium {
+          0%, 100% { box-shadow: 0 0 4px rgba(245, 166, 35, 0.15); border-color: rgba(245, 166, 35, 0.6); }
+          50% { box-shadow: 0 0 14px rgba(245, 166, 35, 0.45); border-color: rgba(245, 166, 35, 1); }
+        }
+        @keyframes border-glow-pulse-info {
+          0%, 100% { box-shadow: 0 0 4px rgba(45, 212, 191, 0.15); border-color: rgba(45, 212, 191, 0.6); }
+          50% { box-shadow: 0 0 14px rgba(45, 212, 191, 0.45); border-color: rgba(45, 212, 191, 1); }
+        }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes pulse-bg-red {
+          0%, 100% { background-color: rgba(185, 28, 28, 0.9); }
+          50% { background-color: rgba(239, 68, 68, 0.9); }
+        }
+        
+        .radar-active svg g {
+          animation: radar-sweep 4s linear infinite !important;
+        }
+        
+        .configure-panel.running-critical > span.absolute { border-color: var(--color-critical) !important; }
+        .configure-panel.running-high > span.absolute { border-color: var(--color-high) !important; }
+        .configure-panel.running-medium > span.absolute { border-color: var(--color-medium) !important; }
+        .configure-panel.running-info > span.absolute { border-color: var(--color-calm) !important; }
+      `}} />
       
       {/* LEFT SIDEBAR NAVBAR */}
       <aside className="w-64 border-r border-[var(--border-subtle)] bg-[var(--bg-panel)] flex flex-col justify-between py-6 z-20 shrink-0">
@@ -939,42 +1180,108 @@ export const Dashboard: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-hidden relative z-10 bg-transparent">
         {/* HEADER BRANDING BANNER */}
         <header className="border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/40 backdrop-blur-md px-8 py-4 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-sm font-bold text-white tracking-wide uppercase font-display">
-              {activeTab === 'live' && 'Security Operations Center - Live Telemetry'}
-              {activeTab === 'simulator' && 'Security Operations Center - Threat Simulator'}
-              {activeTab === 'history' && 'Security Operations Center - SQLite Alert Database'}
-              {activeTab === 'insights' && 'Security Operations Center - Cascade Benchmarks'}
-              {activeTab === 'ai' && 'Security Operations Center - Intelligent Analyst assistant'}
-            </h2>
-            <span className="text-[10px] text-[var(--text-secondary)] font-medium">Bu BUIC BS(IT) Final Year Project Scope</span>
-          </div>
+          {activeTab === 'simulator' ? (
+            // --- SIMULATOR TAB OVERHAULED COMMAND BAR ---
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <Crosshair 
+                  className="w-5.5 h-5.5 text-[var(--accent-amber)]"
+                  style={{
+                    animation: 'spin-slow 8s linear infinite',
+                    animationPlayState: simStatus.running ? 'paused' : 'running'
+                  }}
+                />
+                <div>
+                  <h2 className="text-sm font-bold text-white tracking-wider uppercase font-display leading-none mb-0.5">
+                    THREAT SIMULATION CONSOLE
+                  </h2>
+                  <span className="text-[9.5px] text-[var(--text-secondary)] font-sans block leading-tight">
+                    Controlled attack replay — isolated test environment — no live network traffic generated
+                  </span>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-4">
-            {/* Posture Status Badge */}
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-[var(--text-secondary)] uppercase font-semibold">Posture:</span>
-              <StatusBadge status={postureStatus.label} />
+              <div className="flex items-center gap-4">
+                {/* Posture Status Badge */}
+                <div className="flex items-center gap-1.5 bg-[var(--bg-panel-raised)] px-2 py-0.5 rounded-full border border-[var(--border-subtle)]/40">
+                  <span className="text-[9px] text-[var(--text-secondary)] uppercase font-semibold font-mono">Posture:</span>
+                  <StatusBadge status={postureStatus.label} className="!border-none !p-0" />
+                </div>
+
+                {/* Connection/WS Badge */}
+                <div className="flex items-center gap-1.5 bg-[var(--bg-panel-raised)] px-2 py-0.5 rounded-full border border-[var(--border-subtle)]/40">
+                  <span className="text-[9px] text-[var(--text-secondary)] uppercase font-semibold font-mono">Telemetry:</span>
+                  <StatusBadge 
+                    status={
+                      !wsConnected ? 'Disconnected' : 
+                      (lastHeartbeat && Date.now() - lastHeartbeat < 8000) ? 'Connected' : 'Syncing'
+                    } 
+                    className="!border-none !p-0"
+                  />
+                </div>
+
+                {/* Simulation Running Badge */}
+                <span 
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10"
+                  style={
+                    simStatus.running 
+                      ? { color: 'var(--accent-amber)', backgroundColor: 'rgba(245, 166, 35, 0.12)' }
+                      : { color: 'rgba(148, 163, 184, 0.8)', backgroundColor: 'rgba(148, 163, 184, 0.08)' }
+                  }
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${simStatus.running ? 'bg-[var(--accent-amber)] animate-pulse' : 'bg-slate-500'}`} />
+                  {simStatus.running ? 'SIMULATION: ACTIVE' : 'SIMULATION: IDLE'}
+                </span>
+
+                <div className="h-5 w-[1px] bg-[var(--border-subtle)] mx-1" />
+
+                {/* Log Out */}
+                <GlowButton variant="ghost" onClick={logout} className="px-2.5 py-1.5 text-[9px] font-bold">
+                  <LogOut className="w-3 h-3" />
+                  Logout
+                </GlowButton>
+              </div>
             </div>
+          ) : (
+            // --- STANDARD BANNER FOR OTHER TABS ---
+            <div className="flex items-center justify-between w-full">
+              <div>
+                <h2 className="text-sm font-bold text-white tracking-wide uppercase font-display">
+                  {activeTab === 'live' && 'Security Operations Center - Live Telemetry'}
+                  {activeTab === 'history' && 'Security Operations Center - SQLite Alert Database'}
+                  {activeTab === 'insights' && 'Security Operations Center - Cascade Benchmarks'}
+                  {activeTab === 'ai' && 'Security Operations Center - Intelligent Analyst assistant'}
+                </h2>
+                <span className="text-[10px] text-[var(--text-secondary)] font-medium">Bahria University Karachi  Campus — BS(IT) Final Year Project</span>
+              </div>
 
-            {/* Connection/WS Badge */}
-            <StatusBadge status={
-              !wsConnected ? 'Disconnected' : 
-              (lastHeartbeat && Date.now() - lastHeartbeat < 8000) ? 'Connected' : 'Syncing'
-            } />
+              <div className="flex items-center gap-4">
+                {/* Posture Status Badge */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-[var(--text-secondary)] uppercase font-semibold">Posture:</span>
+                  <StatusBadge status={postureStatus.label} />
+                </div>
 
-            {simStatus.running && (
-              <StatusBadge status="ACTIVE" />
-            )}
+                {/* Connection/WS Badge */}
+                <StatusBadge status={
+                  !wsConnected ? 'Disconnected' : 
+                  (lastHeartbeat && Date.now() - lastHeartbeat < 8000) ? 'Connected' : 'Syncing'
+                } />
 
-            <div className="h-5 w-[1px] bg-[var(--border-subtle)] mx-1" />
+                {simStatus.running && (
+                  <StatusBadge status="ACTIVE" />
+                )}
 
-            {/* Log Out */}
-            <GlowButton variant="ghost" onClick={logout} className="px-2.5 py-1.5 text-[9px] font-bold">
-              <LogOut className="w-3 h-3" />
-              Logout
-            </GlowButton>
-          </div>
+                <div className="h-5 w-[1px] bg-[var(--border-subtle)] mx-1" />
+
+                {/* Log Out */}
+                <GlowButton variant="ghost" onClick={logout} className="px-2.5 py-1.5 text-[9px] font-bold">
+                  <LogOut className="w-3 h-3" />
+                  Logout
+                </GlowButton>
+              </div>
+            </div>
+          )}
         </header>
 
         {/* WORKSPACE TAB VIEWS CONTAINER */}
@@ -1552,171 +1859,601 @@ export const Dashboard: React.FC = () => {
           {/* ==========================================
               VIEW B: THREAT SIMULATOR CONTROLLERS
               ========================================== */}
-          {activeTab === 'simulator' && (
-            <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* Controller Settings Form */}
-                <GlowPanel className="md:col-span-2 flex flex-col justify-between p-6">
-                  <div>
-                    <h3 className="text-sm font-bold text-white tracking-wide mb-1 flex items-center gap-2 uppercase font-display">
-                      <Sliders className="w-4 h-4 text-[var(--accent-amber)]" />
-                      Configure Simulator Preset
-                    </h3>
-                    <p className="text-xs text-[var(--text-secondary)] mb-6">Select scenario preset to stream rows from prepared test data split.</p>
+          {activeTab === 'simulator' && (() => {
+            const activeScenarioInfo = scenarios && selectedScenario ? scenarios[selectedScenario] : null;
+            const armedScenarioDetails = selectedScenario && SCENARIO_DETAILS[selectedScenario] 
+              ? { display_name: scenarios?.[selectedScenario]?.display_name || 'ATTACK', ...SCENARIO_DETAILS[selectedScenario] }
+              : null;
+            
+            const runningSeverity = (simStatus.running && scenarios && selectedScenario && scenarios[selectedScenario]) 
+              ? scenarios[selectedScenario].severity_hint.toLowerCase() 
+              : '';
+            
+            // Lookups for state badge in Live Status panel
+            let stateDot = 'bg-slate-500';
+            let stateText = 'STANDBY';
+            let stateColor = 'text-slate-400 font-mono';
+            let stateBg = 'rgba(148, 163, 184, 0.08)';
+            
+            if (simStatus.running) {
+              stateDot = 'bg-amber-500 animate-pulse';
+              stateText = 'TRANSMITTING';
+              stateColor = 'text-[var(--accent-amber)] font-mono animate-pulse';
+              stateBg = 'rgba(245, 166, 35, 0.12)';
+            } else if (simStatus.packets_sent > 0 && !simStatus.running) {
+              stateDot = 'bg-emerald-500';
+              stateText = 'COMPLETED';
+              stateColor = 'text-emerald-400 font-mono';
+              stateBg = 'rgba(16, 185, 129, 0.12)';
+            }
+            
+            const generateWaveformPaths = () => {
+              const width = 300;
+              const height = 25;
+              const points = ppsHistory;
+              const maxVal = Math.max(...points, 5); // default scale min of 5
+              const coords = points.map((val, idx) => {
+                const x = idx * (width / (points.length - 1));
+                const y = height - (val / maxVal) * (height - 4) - 2; // clamp with 2px borders
+                return { x, y };
+              });
+              
+              const lineD = coords.reduce((acc, coord, idx) => {
+                return acc + `${idx === 0 ? 'M' : 'L'} ${coord.x.toFixed(1)} ${coord.y.toFixed(1)}`;
+              }, '');
+              
+              const areaD = lineD + ` L ${width} ${height} L 0 ${height} Z`;
+              return { lineD, areaD };
+            };
+            const wavePaths = generateWaveformPaths();
+            
+            const totalDetections = (simStatus.tier_breakdown['1'] || 0) + (simStatus.tier_breakdown['2'] || 0) + (simStatus.tier_breakdown['3'] || 0);
+            const t1Pct = totalDetections > 0 ? ((simStatus.tier_breakdown['1'] || 0) / totalDetections) * 100 : 0;
+            const t2Pct = totalDetections > 0 ? ((simStatus.tier_breakdown['2'] || 0) / totalDetections) * 100 : 0;
+            const t3Pct = totalDetections > 0 ? ((simStatus.tier_breakdown['3'] || 0) / totalDetections) * 100 : 0;
+            
+            return (
+              <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+                  
+                  {/* Controller Settings Form */}
+                  <GlowPanel className={`configure-panel md:col-span-2 flex flex-col justify-between p-6 relative overflow-hidden transition-all duration-500 ${
+                    runningSeverity ? `running-${runningSeverity}` : ''
+                  }`}>
+                    {/* Upgrade 7: Scoped Radar Background behind content */}
+                    <div className="absolute inset-0 overflow-hidden rounded-[var(--radius-lg)] pointer-events-none z-0">
+                      <RadarBackground 
+                        isFixed={false} 
+                        className={`transition-all duration-500 pointer-events-none ${
+                          simStatus.running ? 'opacity-[0.06] radar-active' : 'opacity-[0.035]'
+                        }`} 
+                      />
+                    </div>
 
-                    <div className="space-y-5">
+                    <div className="relative z-10 space-y-6 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]/30 mb-4">
+                          <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-2 uppercase font-display leading-none">
+                            <Sliders className="w-4 h-4 text-[var(--accent-amber)]" />
+                            Configure Simulator Preset
+                          </h3>
+                          <span className="text-[8px] text-[var(--accent-amber)] font-mono tracking-wider border border-[var(--accent-amber)]/20 px-2 py-0.5 rounded bg-[var(--accent-amber-glow)]/5">
+                            SYSTEM: LIVE
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[var(--text-secondary)] mb-6 font-sans">Select threat replay scenario profile to inject test packets into the Cascade engine.</p>
+                      </div>
+
                       <div>
                         <label className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block mb-2.5">Select Scenario Preset</label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                          {[
-                            { key: 'ddos_storm', label: 'DDoS Storm', icon: Shield, desc: 'DDoS & DoS traffic' },
-                            { key: 'port_scan', label: 'Port Scan', icon: Activity, desc: 'Sequential port scans' },
-                            { key: 'brute_force', label: 'Brute Force', icon: LockIcon, desc: 'FTP/SSH & Web Brute' },
-                            { key: 'mixed_attack', label: 'Mixed Attack', icon: Sliders, desc: '20% Benign, 80% Attack' },
-                            { key: 'benign_baseline', label: 'Benign Baseline', icon: Database, desc: 'Pure nominal traffic' }
-                          ].map((preset) => {
-                            const isSelected = selectedScenario === preset.key;
-                            const Icon = preset.icon;
-                            return (
-                              <button
-                                key={preset.key}
-                                type="button"
-                                onClick={() => setSelectedScenario(preset.key)}
-                                className={`relative p-3 bg-[var(--bg-panel)] border text-left rounded-[var(--radius-md)] transition-all outline-none cursor-pointer flex flex-col justify-between h-[85px] select-none text-xs hover:border-[var(--border-glow-hover)] ${
-                                  isSelected 
-                                    ? 'border-[var(--accent-amber)] shadow-[0_0_12px_rgba(245,166,35,0.2)]' 
-                                    : 'border-[var(--border-subtle)]'
-                                }`}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                          {loadingScenarios || !scenarios ? (
+                            Array.from({ length: 10 }).map((_, idx) => (
+                              <div
+                                key={idx}
+                                className="animate-pulse bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] rounded-[8px] h-[110px] p-3.5 flex flex-col justify-between"
                               >
-                                {isSelected && (
-                                  <>
-                                    <span className="absolute top-[-1px] left-[-1px] w-2 h-2 border-t-2 border-l-2 border-[var(--accent-amber)] rounded-tl-[var(--radius-sm)]" />
-                                    <span className="absolute top-[-1px] right-[-1px] w-2 h-2 border-t-2 border-r-2 border-[var(--accent-amber)] rounded-tr-[var(--radius-sm)]" />
-                                    <span className="absolute bottom-[-1px] left-[-1px] w-2 h-2 border-b-2 border-l-2 border-[var(--accent-amber)] rounded-bl-[var(--radius-sm)]" />
-                                    <span className="absolute bottom-[-1px] right-[-1px] w-2 h-2 border-b-2 border-r-2 border-[var(--accent-amber)] rounded-br-[var(--radius-sm)]" />
-                                  </>
-                                )}
-                                <div className="flex justify-between items-start w-full">
-                                  <Icon className={`w-4 h-4 ${isSelected ? 'text-[var(--accent-amber)]' : 'text-slate-500'}`} />
-                                  <span className={`text-[6.5px] font-mono px-1 py-0.5 rounded ${isSelected ? 'bg-[var(--accent-amber-glow)] text-[var(--accent-amber)]' : 'bg-[var(--bg-base)] text-slate-500'}`}>
-                                    {isSelected ? 'ACTIVE' : 'READY'}
-                                  </span>
+                                <div className="flex justify-between items-center w-full">
+                                  <div className="w-2 h-2 bg-slate-700 rounded-full" />
+                                  <div className="w-4.5 h-4.5 bg-slate-700 rounded" />
                                 </div>
-                                <div className="mt-2 overflow-hidden w-full">
-                                  <p className={`font-bold tracking-tight uppercase text-[8.5px] truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>{preset.label}</p>
-                                  <span className="text-[7.5px] text-[var(--text-secondary)] block truncate leading-none mt-0.5">{preset.desc}</span>
+                                <div className="space-y-1.5 w-full">
+                                  <div className="w-16 h-2 bg-slate-700 rounded" />
+                                  <div className="w-full h-1.5 bg-slate-700 rounded" />
                                 </div>
-                              </button>
-                            );
-                          })}
+                              </div>
+                            ))
+                          ) : (
+                            Object.entries(scenarios).map(([key, info]) => {
+                              const isSelected = selectedScenario === key;
+                              const Icon = getScenarioIcon(key);
+                              const details = SCENARIO_DETAILS[key] || SCENARIO_DETAILS.benign_baseline;
+                              
+                              const severityDotColor = 
+                                info.severity_hint === 'Critical' ? 'bg-[var(--color-critical)]' :
+                                info.severity_hint === 'High' ? 'bg-[var(--color-high)]' :
+                                info.severity_hint === 'Medium' ? 'bg-[var(--color-medium)]' :
+                                'bg-[var(--color-calm)]';
+                                
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => setSelectedScenario(key)}
+                                  className="w-full text-left transition-all outline-none cursor-pointer select-none group relative"
+                                >
+                                  <div 
+                                    className={`relative p-3 flex flex-col justify-between min-h-[110px] rounded-[8px] border transition-all duration-300 ${
+                                      isSelected 
+                                        ? 'bg-[var(--bg-panel-raised)] border-[var(--accent-amber)]' 
+                                        : 'bg-[var(--bg-panel-raised)]/60 hover:bg-[var(--bg-panel-raised)] border-[var(--border-subtle)] hover:border-slate-500/80'
+                                    }`}
+                                    style={
+                                      isSelected 
+                                        ? { 
+                                            borderColor: details.color, 
+                                            boxShadow: `0 0 12px ${details.glow}`,
+                                            animation: `border-glow-pulse-${details.severity.toLowerCase()} 2s ease-in-out infinite`
+                                          } 
+                                        : {}
+                                    }
+                                  >
+                                    {/* ARMED OVERLAY ON TOP RIGHT */}
+                                    {isSelected && (
+                                      <span 
+                                        className="absolute top-1 right-1.5 text-[7px] font-mono font-bold tracking-wider animate-[pulse-fast_1.5s_ease-in-out_infinite]"
+                                        style={{ color: details.color }}
+                                      >
+                                        ARMED
+                                      </span>
+                                    )}
+
+                                    {/* TOP ROW: Severity Dot (left) and Icon (right) */}
+                                    <div className="flex justify-between items-center w-full">
+                                      <span 
+                                        className={`w-2 h-2 rounded-full ${severityDotColor}`}
+                                        style={{
+                                          animation: 
+                                            info.severity_hint === 'Critical' 
+                                              ? 'pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite' 
+                                              : info.severity_hint === 'High' 
+                                                ? 'pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite' 
+                                                : 'none'
+                                        }}
+                                        title={`Severity: ${info.severity_hint}`} 
+                                      />
+                                      <Icon 
+                                        className={`w-5.5 h-5.5 transition-transform duration-300 group-hover:scale-[1.05]`} 
+                                        style={{
+                                          color: details.color,
+                                          filter: isSelected ? `drop-shadow(0 0 6px ${details.color})` : 'none'
+                                        }}
+                                      />
+                                    </div>
+
+                                    {/* MIDDLE: Display name, wrapping allowed */}
+                                    <div className="mt-2 w-full">
+                                      <p className={`font-bold tracking-tight uppercase text-[9px] font-body leading-tight ${isSelected ? 'text-white font-extrabold' : 'text-slate-300'}`}>
+                                        {info.display_name}
+                                      </p>
+                                    </div>
+
+                                    {/* BOTTOM: Description and Severity Label chip */}
+                                    <div className="flex items-end justify-between gap-1 mt-2.5 w-full">
+                                      <span className="text-[11px] text-[var(--text-secondary)] block line-clamp-2 leading-tight pr-1 font-sans">
+                                        {info.description}
+                                      </span>
+                                      <span 
+                                        className="text-[6.5px] font-mono font-bold px-1.5 py-0.5 rounded border leading-none shrink-0" 
+                                        style={{ color: details.color, borderColor: details.border, backgroundColor: details.bg }}
+                                      >
+                                        {info.severity_hint.toUpperCase()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block mb-2">Stream Rate (Packets/Sec)</label>
+                      {/* Upgrade 3: Attack Profile Preview Panel */}
+                      <div className={`transition-all duration-300 ease-in-out overflow-hidden border border-[var(--border-subtle)]/45 rounded-[var(--radius-lg)] bg-[var(--bg-base)]/40 ${
+                        selectedScenario 
+                          ? 'max-h-[300px] opacity-100 p-4 mt-2' 
+                          : 'max-h-[100px] opacity-90 p-4 mt-2'
+                      }`}>
+                        {!selectedScenario ? (
+                          <div className="h-12 flex items-center justify-center text-[var(--text-secondary)] text-[10px] uppercase tracking-widest font-mono animate-pulse">
+                            ← SELECT A SCENARIO TO VIEW ATTACK PROFILE
+                          </div>
+                        ) : (
+                          (() => {
+                            const info = SCENARIO_DETAILS[selectedScenario] || SCENARIO_DETAILS.benign_baseline;
+                            const estPackets = simRate * simDuration;
+                            const estDetections = selectedScenario === 'benign_baseline' 
+                              ? Math.round(estPackets * 0.02) 
+                              : Math.round(estPackets * 0.95);
+                              
+                            // Simulation intensity calculation
+                            let intensityLabel = 'LOW';
+                            let intensityWidth = '25%';
+                            let intensityColor = 'bg-[var(--color-calm)]';
+                            let intensityPulse = '';
+                            if (simRate >= 31) {
+                              intensityLabel = 'EXTREME';
+                              intensityWidth = '100%';
+                              intensityColor = 'bg-red-600';
+                              intensityPulse = 'animate-pulse';
+                            } else if (simRate >= 16) {
+                              intensityLabel = 'HIGH';
+                              intensityWidth = '85%';
+                              intensityColor = 'bg-orange-500';
+                            } else if (simRate >= 6) {
+                              intensityLabel = 'MEDIUM';
+                              intensityWidth = '60%';
+                              intensityColor = 'bg-amber-500';
+                            }
+
+                            return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs align-top">
+                                {/* Left Half: Summary */}
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <h4 className="text-sm font-bold uppercase tracking-wider font-display" style={{ color: info.color }}>
+                                      {scenarios?.[selectedScenario]?.display_name || info.severity} Scenario Profile
+                                    </h4>
+                                    <span 
+                                      className="text-[8px] font-mono font-extrabold px-1.5 py-0.5 rounded border leading-none"
+                                      style={{ color: info.color, borderColor: info.border, backgroundColor: info.bg }}
+                                    >
+                                      {info.severity.toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                                    {scenarios?.[selectedScenario]?.description || 'Configuration profile preview.'}
+                                  </p>
+                                  
+                                  {/* Data Chips Row */}
+                                  <div className="flex flex-wrap gap-2 text-[9px] font-mono">
+                                    <span className="px-2 py-0.5 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)]/60 text-slate-300 rounded">
+                                      SEVERITY: <span className="font-bold" style={{ color: info.color }}>{info.severity}</span>
+                                    </span>
+                                    <span className="px-2 py-0.5 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)]/60 text-slate-300 rounded">
+                                      TYPE: <span className="text-white font-bold">{info.type}</span>
+                                    </span>
+                                    <span className="px-2 py-0.5 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)]/60 text-slate-300 rounded">
+                                      EXPECTED TIER HIT: <span className="text-[var(--accent-amber)] font-bold">{info.tier}</span>
+                                    </span>
+                                  </div>
+                                  
+                                  <p className="text-[10px] text-slate-400 font-mono leading-snug border-l border-[var(--accent-amber)]/40 pl-2">
+                                    <span className="text-[var(--accent-amber)] font-bold">THREAT VECTOR:</span> {info.vector}
+                                  </p>
+                                </div>
+
+                                {/* Right Half: Estimated Readout */}
+                                <div className="space-y-3 border-t md:border-t-0 md:border-l border-[var(--border-subtle)]/30 pt-3 md:pt-0 md:pl-6 flex flex-col justify-between">
+                                  <div>
+                                    <h4 className="text-[10.5px] font-mono font-bold text-white uppercase tracking-wider mb-2.5">
+                                      Estimated Simulation Readout
+                                    </h4>
+                                    <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                                      <div className="bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)]/30 rounded p-1.5">
+                                        <span className="text-[7.5px] text-[var(--text-secondary)] block uppercase">Est. Packets</span>
+                                        <span className="text-xs text-white font-bold">{estPackets.toLocaleString()}</span>
+                                      </div>
+                                      <div className="bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)]/30 rounded p-1.5">
+                                        <span className="text-[7.5px] text-[var(--text-secondary)] block uppercase">Est. Alerts</span>
+                                        <span className="text-xs text-[var(--color-critical)] font-bold">{estDetections.toLocaleString()}</span>
+                                      </div>
+                                      <div className="bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)]/30 rounded p-1.5">
+                                        <span className="text-[7.5px] text-[var(--text-secondary)] block uppercase">Est. Duration</span>
+                                        <span className="text-xs text-white font-bold">{simDuration}s</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Intensity Bar */}
+                                  <div className="space-y-1 mt-1">
+                                    <div className="flex justify-between items-center text-[9px] font-mono">
+                                      <span className="text-[var(--text-secondary)] uppercase">Simulation Intensity:</span>
+                                      <span className="font-bold text-white uppercase">{intensityLabel}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden border border-[var(--border-subtle)]/30">
+                                      <div 
+                                        className={`h-full ${intensityColor} ${intensityPulse} rounded-full transition-all duration-300`} 
+                                        style={{ width: intensityWidth }} 
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        )}
+                      </div>
+
+                      {/* Divider */}
+                      <div className="h-[1px] bg-[var(--border-subtle)]/30 my-4" />
+
+                      {/* Upgrade 4: Styled Tactical Controls */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                        {/* Rate Control Group */}
+                        <div className="border-r border-[var(--border-subtle)]/30 pr-0 md:pr-6 space-y-3">
+                          <div>
+                            <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block leading-none">Stream Rate</span>
+                            <span className="text-[8px] text-[var(--text-muted)] font-mono uppercase tracking-wider">packets / second</span>
+                          </div>
+                          
+                          {/* Rate Presets */}
+                          <div className="flex gap-2">
+                            {[
+                              { label: 'SLOW: 2', val: 2 },
+                              { label: 'NORMAL: 5', val: 5 },
+                              { label: 'FAST: 15', val: 15 },
+                              { label: 'MAX: 30', val: 30 }
+                            ].map((p) => (
+                              <GlowButton
+                                key={p.val}
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setSimRate(p.val)}
+                                className={`px-2 py-1 text-[8.5px] font-mono leading-none border rounded transition-all ${
+                                  simRate === p.val 
+                                    ? '!text-[var(--accent-amber)] !border-[var(--accent-amber)] bg-[var(--accent-amber-glow)]/10' 
+                                    : 'border-[var(--border-subtle)] text-slate-400'
+                                }`}
+                              >
+                                {p.label}
+                              </GlowButton>
+                            ))}
+                          </div>
+
                           <input
                             type="number"
                             min="1"
-                            max="100"
+                            max="50"
                             value={simRate}
-                            onChange={(e) => setSimRate(Math.max(1, parseInt(e.target.value) || 1))}
+                            onChange={(e) => setSimRate(Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
                             className="w-full bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] rounded-[var(--radius-sm)] p-2.5 text-xs text-white outline-none transition-all font-mono"
                           />
                         </div>
-                        <div>
-                          <label className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block mb-2">Duration (Seconds)</label>
+
+                        {/* Duration Control Group */}
+                        <div className="space-y-3">
+                          <div>
+                            <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block leading-none">Duration</span>
+                            <span className="text-[8px] text-[var(--text-muted)] font-mono uppercase tracking-wider">seconds</span>
+                          </div>
+
+                          {/* Duration Presets */}
+                          <div className="flex gap-2">
+                            {[
+                              { label: '15s', val: 15 },
+                              { label: '30s', val: 30 },
+                              { label: '60s', val: 60 },
+                              { label: '120s', val: 120 }
+                            ].map((p) => (
+                              <GlowButton
+                                key={p.val}
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setSimDuration(p.val)}
+                                className={`px-2.5 py-1 text-[8.5px] font-mono leading-none border rounded transition-all ${
+                                  simDuration === p.val 
+                                    ? '!text-[var(--accent-amber)] !border-[var(--accent-amber)] bg-[var(--accent-amber-glow)]/10' 
+                                    : 'border-[var(--border-subtle)] text-slate-400'
+                                }`}
+                              >
+                                {p.label}
+                              </GlowButton>
+                            ))}
+                          </div>
+
                           <input
                             type="number"
                             min="5"
+                            max="300"
                             value={simDuration}
-                            onChange={(e) => setSimDuration(Math.max(5, parseInt(e.target.value) || 5))}
+                            onChange={(e) => setSimDuration(Math.min(300, Math.max(5, parseInt(e.target.value) || 5)))}
                             className="w-full bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] rounded-[var(--radius-sm)] p-2.5 text-xs text-white outline-none transition-all font-mono"
                           />
                         </div>
                       </div>
+
+                      {/* Divider */}
+                      <div className="h-[1px] bg-[var(--border-subtle)]/30 my-4" />
                     </div>
-                  </div>
 
-                  <div className="mt-8 pt-4 border-t border-[var(--border-subtle)]/40 flex gap-3">
-                    {simStatus.running ? (
-                      <GlowButton
-                        onClick={handleStopSim}
-                        variant="secondary"
-                        className="px-6 py-2.5 border-[var(--color-critical)] text-[var(--color-critical)] hover:bg-[var(--color-critical)]/10 flex items-center gap-1.5"
-                      >
-                        <Square className="w-3.5 h-3.5" />
-                        Stop Simulation
-                      </GlowButton>
-                    ) : (
-                      <GlowButton
-                        onClick={handleStartSim}
-                        variant="primary"
-                        className="px-6 py-2.5 flex items-center gap-1.5"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        Start Simulation
-                      </GlowButton>
-                    )}
-                  </div>
-                </GlowPanel>
+                    {/* Action CTA Button */}
+                    <div className="mt-6 z-10 relative">
+                      {simStatus.running ? (
+                        // RUNNING STATE: ABORT SIMULATION
+                        <button
+                          onClick={handleStopSim}
+                          type="button"
+                          className="relative w-full h-[52px] bg-red-950/40 border border-red-500 rounded-[var(--radius-md)] flex items-center justify-between px-5 cursor-pointer outline-none select-none overflow-hidden transition-all duration-300 text-xs animate-[pulse-bg-red_3s_ease-in-out_infinite]"
+                        >
+                          <div className="flex items-center gap-2 text-red-100 font-bold tracking-widest font-display">
+                            <Square className="w-4 h-4 fill-red-100 animate-pulse" />
+                            <span>ABORT SIMULATION</span>
+                          </div>
+                          <span className="font-mono text-[9px] text-red-200/80 bg-red-900/30 px-2 py-0.5 rounded border border-red-500/20 uppercase font-semibold">
+                            [ {scenarios?.[selectedScenario]?.display_name || 'ATTACK'} STREAM ACTIVE ]
+                          </span>
 
-                {/* Live Sim Telemetry Stats */}
-                <GlowPanel className="flex flex-col justify-between p-6">
-                  <div>
-                    <h3 className="text-sm font-bold text-white tracking-wide mb-1 flex items-center gap-2 uppercase font-display">
-                      <Clock className="w-4 h-4 text-[var(--accent-amber)]" />
-                      Live Status Panel
-                    </h3>
-                    <p className="text-xs text-[var(--text-secondary)] mb-6">Real-time status metrics of replayer task.</p>
+                          {/* Bottom edge progress bar */}
+                          <div 
+                            className="absolute bottom-0 left-0 h-1 bg-white opacity-40 transition-all ease-linear"
+                            style={{
+                              width: `${Math.min(100, (localElapsed / (simStatus.duration_seconds || 30)) * 100)}%`,
+                              transitionDuration: '1000ms'
+                            }}
+                          />
+                        </button>
+                      ) : (
+                        // IDLE STATE: INITIATE SIMULATION
+                        (() => {
+                          const isArmed = !!selectedScenario;
+                          const info = armedScenarioDetails;
+                          const labelText = isArmed ? `[ ${info?.display_name || 'ATTACK'} ARMED ]` : '[ SELECT SCENARIO ]';
+                          
+                          return (
+                            <button
+                              onClick={isArmed ? handleStartSim : undefined}
+                              type="button"
+                              disabled={!isArmed}
+                              className={`group relative w-full h-[52px] rounded-[var(--radius-md)] flex items-center justify-between px-5 outline-none select-none overflow-hidden transition-all duration-300 text-xs border ${
+                                isArmed 
+                                  ? 'bg-gradient-to-r from-amber-600 to-amber-500 border-amber-500/50 cursor-pointer hover:brightness-110 shadow-[0_0_12px_rgba(245,166,35,0.15)] text-white'
+                                  : 'bg-slate-900 border-[var(--border-subtle)] cursor-not-allowed text-slate-500'
+                              }`}
+                            >
+                              {/* Sweeping shimmer effect on hover */}
+                              {isArmed && (
+                                <div 
+                                  className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_0.6s_ease-out]"
+                                  style={{ backgroundSize: '200% 100%' }}
+                                />
+                              )}
 
-                    <div className="space-y-4 text-xs font-mono">
-                      <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
-                        <span className="text-[var(--text-secondary)] font-sans">Status State:</span>
-                        <StatusBadge status={simStatus.running ? 'RUNNING' : 'READY'} />
+                              <div className="flex items-center gap-2 font-bold tracking-widest font-display">
+                                <Play 
+                                  className={`w-4 h-4 fill-current`} 
+                                  style={{
+                                    transform: 'scale(1.0)',
+                                    animation: isArmed ? 'pulse 2s ease-in-out infinite' : 'none'
+                                  }}
+                                />
+                                <span>INITIATE SIMULATION</span>
+                              </div>
+                              
+                              <span 
+                                className={`font-mono text-[9px] px-2 py-0.5 rounded border uppercase font-semibold ${
+                                  isArmed 
+                                    ? 'text-amber-100 bg-amber-800/20 border-amber-400/20' 
+                                    : 'text-red-400 bg-red-950/20 border-red-500/20'
+                                }`}
+                              >
+                                {labelText}
+                              </span>
+                            </button>
+                          );
+                        })()
+                      )}
+                    </div>
+                  </GlowPanel>
+
+                  {/* Live Sim Telemetry Stats */}
+                  <GlowPanel className="flex flex-col justify-between p-6">
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-wide mb-1 flex items-center gap-2 uppercase font-display">
+                        <Activity className="w-4 h-4 text-[var(--accent-amber)] animate-pulse" />
+                        Live Status Panel
+                      </h3>
+                      <p className="text-xs text-[var(--text-secondary)] mb-6">Real-time telemetry — replayer task metrics</p>
+
+                      <div className="space-y-4 text-xs font-mono">
+                        <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2 items-center">
+                          <span className="text-[var(--text-secondary)] font-sans">Status State:</span>
+                          <span 
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold rounded-full border border-current/10"
+                            style={{ color: stateColor.includes('amber') ? 'var(--accent-amber)' : stateColor.includes('emerald') ? 'rgb(52, 211, 153)' : 'rgba(148, 163, 184, 0.8)', backgroundColor: stateBg }}
+                          >
+                            <span className={`w-1 h-1 rounded-full ${stateDot}`} />
+                            {stateText}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
+                          <span className="text-[var(--text-secondary)] font-sans">Preset Scenario:</span>
+                          <span className="text-[var(--accent-amber)] font-bold uppercase font-mono text-[10.5px]">
+                            {activeScenarioInfo?.display_name || '--'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
+                          <span className="text-[var(--text-secondary)] font-sans">Elapsed / Limit:</span>
+                          <span className="text-slate-300 font-bold font-mono">{localElapsed}s / {simStatus.duration_seconds || '∞'}s</span>
+                        </div>
+                        <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
+                          <span className="text-[var(--text-secondary)] font-sans">Ingress Packets:</span>
+                          <span className="text-white font-bold font-mono">{simStatus.packets_sent.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
+                          <span className="text-[var(--text-secondary)] font-sans">Threat Alerts:</span>
+                          <span className={`font-mono font-bold ${simStatus.attacks_detected > 0 ? 'text-[var(--color-critical)]' : 'text-slate-500'}`}>
+                            {simStatus.attacks_detected.toLocaleString()}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
-                        <span className="text-[var(--text-secondary)] font-sans">Preset Scenario:</span>
-                        <span className="text-slate-300 font-bold uppercase text-[10px]">{simStatus.scenario || '--'}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
-                        <span className="text-[var(--text-secondary)] font-sans">Elapsed / Limit:</span>
-                        <span className="text-slate-300 font-bold">{simStatus.elapsed_seconds}s / {simStatus.duration_seconds || '∞'}s</span>
-                      </div>
-                      <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
-                        <span className="text-[var(--text-secondary)] font-sans">Ingress Packets:</span>
-                        <span className="text-white font-bold">{simStatus.packets_sent.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-[var(--border-subtle)]/30 pb-2">
-                        <span className="text-[var(--text-secondary)] font-sans">Threat Alerts Logged:</span>
-                        <span className="text-[var(--color-critical)] font-bold">{simStatus.attacks_detected.toLocaleString()}</span>
+
+                      {/* Live Intensity Waveform Oscilloscope */}
+                      <div className="my-4">
+                        <span className="text-[8px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block mb-1">
+                          Detection Intensity — Last 20s
+                        </span>
+                        <div className="w-full bg-[var(--bg-base)]/60 border border-[var(--border-subtle)]/45 rounded p-1.5 h-[35px] flex items-center relative overflow-hidden">
+                          <svg className="w-full h-full text-[var(--accent-amber)]" viewBox="0 0 300 25" preserveAspectRatio="none">
+                            <defs>
+                              <linearGradient id="waveGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="var(--accent-amber)" stopOpacity="0.4" />
+                                <stop offset="100%" stopColor="var(--accent-amber)" stopOpacity="0" />
+                              </linearGradient>
+                            </defs>
+                            <path d={wavePaths.areaD} fill="url(#waveGrad)" stroke="none" />
+                            <path d={wavePaths.lineD} fill="none" stroke="currentColor" strokeWidth="1.2" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mt-8">
-                    <span className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block mb-3 font-sans">Resolution Cascade breakdown</span>
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="bg-[var(--bg-base)] p-2 border border-[var(--border-subtle)] rounded-lg text-center">
-                        <p className="font-mono font-bold text-white text-xs">{simStatus.tier_breakdown['1'] || 0}</p>
-                        <span className="text-[7px] text-[var(--text-secondary)] block font-mono">T-1</span>
+                    <div className="mt-4">
+                      <span className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-wider block mb-3 font-sans">
+                        Cascade Tier Resolution
+                      </span>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        {/* T-1 Block */}
+                        <div className="bg-[var(--bg-panel-raised)] p-2.5 border border-[var(--border-subtle)]/65 rounded flex flex-col justify-between">
+                          <span className="text-[6.5px] text-[var(--text-secondary)] block font-mono leading-none uppercase mb-1.5">T-1 Screener</span>
+                          <p className="font-mono font-bold text-[var(--color-calm)] text-xs leading-none">{simStatus.tier_breakdown['1'] || 0}</p>
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                            <div className="h-full bg-[var(--color-calm)] rounded-full transition-all duration-300" style={{ width: `${t1Pct}%` }} />
+                          </div>
+                          <span className="text-[6px] text-slate-500 font-mono mt-1 leading-none">{Math.round(t1Pct)}%</span>
+                        </div>
+                        
+                        {/* T-2 Block */}
+                        <div className="bg-[var(--bg-panel-raised)] p-2.5 border border-[var(--border-subtle)]/65 rounded flex flex-col justify-between">
+                          <span className="text-[6.5px] text-[var(--text-secondary)] block font-mono leading-none uppercase mb-1.5">T-2 Validator</span>
+                          <p className="font-mono font-bold text-[var(--accent-amber)] text-xs leading-none">{simStatus.tier_breakdown['2'] || 0}</p>
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                            <div className="h-full bg-[var(--accent-amber)] rounded-full transition-all duration-300" style={{ width: `${t2Pct}%` }} />
+                          </div>
+                          <span className="text-[6px] text-slate-500 font-mono mt-1 leading-none">{Math.round(t2Pct)}%</span>
+                        </div>
+                        
+                        {/* T-3 Block */}
+                        <div className="bg-[var(--bg-panel-raised)] p-2.5 border border-[var(--border-subtle)]/65 rounded flex flex-col justify-between">
+                          <span className="text-[6.5px] text-[var(--text-secondary)] block font-mono leading-none uppercase mb-1.5">T-3 Arbiter</span>
+                          <p className="font-mono font-bold text-[#A78BFA] text-xs leading-none">{simStatus.tier_breakdown['3'] || 0}</p>
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                            <div className="h-full bg-[#A78BFA] rounded-full transition-all duration-300" style={{ width: `${t3Pct}%` }} />
+                          </div>
+                          <span className="text-[6px] text-slate-500 font-mono mt-1 leading-none">{Math.round(t3Pct)}%</span>
+                        </div>
                       </div>
-                      <div className="bg-[var(--bg-base)] p-2 border border-[var(--border-subtle)] rounded-lg text-center">
-                        <p className="font-mono font-bold text-white text-xs">{simStatus.tier_breakdown['2'] || 0}</p>
-                        <span className="text-[7px] text-[var(--text-secondary)] block font-mono">T-2</span>
-                      </div>
-                      <div className="bg-[var(--bg-base)] p-2 border border-[var(--border-subtle)] rounded-lg text-center">
-                        <p className="font-mono font-bold text-white text-xs">{simStatus.tier_breakdown['3'] || 0}</p>
-                        <span className="text-[7px] text-[var(--text-secondary)] block font-mono">T-3</span>
-                      </div>
+
+                      <span className="text-[7.5px] text-[var(--text-secondary)] leading-relaxed block mt-2.5 text-center border-t border-[var(--border-subtle)]/20 pt-2.5 font-sans italic">
+                        T-2 and T-3 activate for ambiguous or rare attack patterns (Infiltration, Heartbleed). Run those scenarios to observe multi-tier escalation.
+                      </span>
                     </div>
-                  </div>
-                </GlowPanel>
+                  </GlowPanel>
 
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ==========================================
               VIEW C: ALERT DATABASE HISTORY LOGS
@@ -2244,29 +2981,53 @@ export const Dashboard: React.FC = () => {
               VIEW E: AI SECURITY CHAT ASSISTANT
               ========================================== */}
           {activeTab === 'ai' && (
-            <div className="flex flex-col gap-6 max-w-4xl mx-auto h-[550px] relative w-full">
+            <div className="flex flex-col gap-6 max-w-5xl mx-auto h-[calc(100vh-190px)] relative w-full" style={{ boxShadow: '0 0 30px rgba(245,166,35,0.04)' }}>
               <GlowPanel className="flex-1 flex flex-col overflow-hidden p-0 relative">
                 {/* Chat header */}
                 <div className="px-6 py-4 bg-[var(--bg-panel-raised)] border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 z-10">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[var(--accent-amber)] animate-pulse shadow-[0_0_8px_var(--accent-amber)]" />
-                    <h4 className="text-xs font-bold text-white tracking-widest uppercase font-display">
-                      AI SECURITY ASSISTANT
-                    </h4>
-                  </div>
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-teal-400/20 bg-teal-950/20 text-teal-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                    <Radio 
+                      className="w-5 h-5 text-[var(--accent-amber)]" 
+                      style={{ animation: 'icon-pulse-slow 3s ease-in-out infinite' }}
+                    />
+                    <div>
+                      <h4 className="text-xs font-bold text-white tracking-widest uppercase font-display leading-none mb-0.5">
+                        SENTINEL AI
+                      </h4>
+                      <span className="text-[9px] text-[var(--text-secondary)] block leading-none font-sans">
+                        Intelligent Security Analyst Assistant
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2.5">
+                    {/* RULE-BASE Badge */}
+                    <span 
+                      style={{ color: 'var(--color-calm)', backgroundColor: 'rgba(45, 212, 191, 0.12)' }}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10 select-none"
+                    >
+                      <span className="text-[10px] leading-none">⚡</span>
                       RULE-BASE: ACTIVE
                     </span>
+                    
+                    {/* Divider */}
+                    <div className="h-4 w-[1px] bg-[var(--border-subtle)]/45" />
+
+                    {/* GEMINI Badge */}
                     {geminiAvailable ? (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--accent-amber)]/20 bg-amber-950/20 text-[var(--accent-amber)]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse" />
+                      <span 
+                        style={{ color: 'var(--accent-amber)', backgroundColor: 'rgba(245, 166, 35, 0.12)' }}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10 select-none"
+                      >
+                        <span className="text-[10px] leading-none">✦</span>
                         GEMINI: CONNECTED
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-slate-500/20 bg-slate-900/50 text-slate-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                      <span 
+                        style={{ color: 'var(--text-secondary)', backgroundColor: 'rgba(148, 163, 184, 0.08)' }}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10 select-none"
+                      >
+                        <span className="text-[10px] leading-none text-slate-500">✦</span>
                         GEMINI: UNAVAILABLE
                       </span>
                     )}
@@ -2277,22 +3038,55 @@ export const Dashboard: React.FC = () => {
                 <div 
                   ref={chatContainerRef}
                   onScroll={handleChatScroll}
-                  className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--bg-base)] relative overflow-hidden flex flex-col"
+                  className="chat-history-container flex-1 overflow-y-auto p-6 bg-[var(--bg-base)] relative overflow-hidden flex flex-col"
+                  style={{ boxShadow: 'inset 0 8px 16px rgba(0, 0, 0, 0.45), inset 0 -8px 16px rgba(0, 0, 0, 0.45)' }}
                 >
-                  <RadarBackground isFixed={false} className="opacity-[0.05]" />
+                  <RadarBackground isFixed={false} className="opacity-[0.035]" />
                   
                   <style dangerouslySetInnerHTML={{ __html: `
-                    @keyframes typing-dot-1 {
-                      0%, 100% { opacity: 0.3; transform: translateY(0px); }
-                      50% { opacity: 1; transform: translateY(-4px); }
+                    .chat-history-container {
+                      scrollbar-width: thin;
+                      scrollbar-color: rgba(245, 166, 35, 0.3) transparent;
                     }
-                    @keyframes typing-dot-2 {
-                      0%, 100% { opacity: 0.3; transform: translateY(0px); }
-                      50% { opacity: 1; transform: translateY(-4px); }
+                    .chat-history-container::-webkit-scrollbar {
+                      width: 4px;
                     }
-                    @keyframes typing-dot-3 {
-                      0%, 100% { opacity: 0.3; transform: translateY(0px); }
-                      50% { opacity: 1; transform: translateY(-4px); }
+                    .chat-history-container::-webkit-scrollbar-track {
+                      background: transparent;
+                    }
+                    .chat-history-container::-webkit-scrollbar-thumb {
+                      background: rgba(245, 166, 35, 0.3);
+                      border-radius: 2px;
+                    }
+                    .chat-history-container::-webkit-scrollbar-thumb:hover {
+                      background: rgba(245, 166, 35, 0.6);
+                    }
+                    .chat-history-container svg g {
+                      animation: radar-sweep 15s linear infinite !important;
+                    }
+                    @keyframes typing-bounce {
+                      0%, 100% { transform: translateY(0); }
+                      50% { transform: translateY(-6px); }
+                    }
+                    .typing-dot {
+                      width: 8px;
+                      height: 8px;
+                      border-radius: 50%;
+                      background-color: var(--accent-amber);
+                      display: inline-block;
+                      animation: typing-bounce 1.2s infinite ease-in-out;
+                    }
+                    .typing-dot:nth-child(1) { animation-delay: 0s; }
+                    .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+                    .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+                    
+                    @keyframes icon-pulse-slow {
+                      0%, 100% { transform: scale(1.0); }
+                      50% { transform: scale(1.05); }
+                    }
+                    @keyframes opacity-pulse-slow {
+                      0%, 100% { opacity: 0.45; }
+                      50% { opacity: 0.95; }
                     }
                     @keyframes radar-spin-tiny {
                       from { transform: rotate(0deg); }
@@ -2301,117 +3095,146 @@ export const Dashboard: React.FC = () => {
                   `}} />
 
                   {messages.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto relative z-10 animate-fade-in my-auto">
-                      <h2 className="text-xl font-bold text-white tracking-wider uppercase font-display mb-2">
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto relative z-10 animate-fade-in my-auto select-none">
+                      {/* 56px Avatar spinning slowly */}
+                      <div className="w-14 h-14 rounded-full bg-[var(--bg-panel-raised)] border border-[var(--accent-amber)] flex items-center justify-center mb-4 shadow-[0_0_15px_rgba(245,166,35,0.15)]">
+                        <Activity 
+                          className="w-7 h-7 text-[var(--accent-amber)]" 
+                          style={{ animation: 'spin-slow 8s linear infinite' }}
+                        />
+                      </div>
+                      
+                      <h2 className="text-xl font-bold text-white tracking-widest uppercase font-display mb-1">
                         SENTINEL AI
                       </h2>
-                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-6 font-body">
-                        Ask me anything about cybersecurity, this system, or any active threat.
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4 font-body">
+                        Cybersecurity Intelligence — Always On Scope
                       </p>
-                      <div className="grid grid-cols-2 gap-3 w-full">
+                      
+                      <div className="w-24 h-[1px] bg-[var(--border-subtle)]/40 mb-6 mx-auto" />
+                      
+                      <div className="grid grid-cols-2 gap-3 w-full mb-6">
                         {[
                           "What is a DDoS attack?",
                           "How does the cascade work?",
                           "Explain the last alert",
                           "What is SMOTE?"
                         ].map((q) => (
-                          <button
+                          <GlowButton
                             key={q}
                             type="button"
+                            variant="ghost"
                             onClick={() => sendChatMessage(q)}
-                            className="px-3 py-2 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] hover:border-[var(--accent-amber)] hover:text-white rounded-[var(--radius-sm)] text-[10px] text-[var(--text-secondary)] font-mono transition-all text-left truncate cursor-pointer hover:shadow-[0_0_8px_rgba(245,166,35,0.1)] outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-amber)]"
+                            className="px-3.5 py-2.5 text-[9.5px] font-sans text-left transition-all leading-normal flex items-center"
                           >
                             {q}
-                          </button>
+                          </GlowButton>
                         ))}
                       </div>
+                      
+                      <span 
+                        className="text-[8.5px] text-[var(--text-secondary)] font-mono tracking-widest uppercase block"
+                        style={{ animation: 'opacity-pulse-slow 2s ease-in-out infinite' }}
+                      >
+                        Or type your own question below
+                      </span>
                     </div>
                   ) : (
-                    <div className="space-y-5 relative z-10 flex flex-col">
+                    <div className="space-y-4 relative z-10 flex flex-col pb-3 pt-3">
                       {messages.map((msg, i) => {
                         const isUser = msg.role === 'user';
+                        
+                        // Spacing visual check
+                        const nextMsg = messages[i + 1];
+                        const isSameNext = nextMsg && nextMsg.role === msg.role;
+                        const mbClass = isSameNext ? 'mb-1.5' : 'mb-4';
+
                         return (
                           <div
                             key={i}
-                            className={`flex flex-col max-w-[80%] ${
-                              isUser ? 'ml-auto items-end' : 'mr-auto items-start'
-                            }`}
+                            className={`flex flex-col ${
+                              isUser ? 'ml-auto items-end max-w-[72%] w-full' : 'mr-auto items-start max-w-[80%] w-full'
+                            } ${mbClass}`}
                           >
-                            <span className="text-[8px] text-[var(--text-secondary)] mb-1 block px-1 font-mono uppercase tracking-wider">
-                              {isUser ? (
-                                "YOU"
-                              ) : (
-                                <div className="flex items-center gap-1">
-                                  <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
-                                    <svg 
-                                      className="w-full h-full text-[var(--accent-amber)]" 
-                                      viewBox="0 0 24 24" 
-                                      fill="none" 
-                                      stroke="currentColor" 
-                                      strokeWidth="1.5"
-                                      style={{ 
-                                        animation: 'radar-spin-tiny 3s linear infinite',
-                                        transformOrigin: '12px 12px'
-                                      }}
-                                    >
-                                      <circle cx="12" cy="12" r="10" strokeDasharray="3 3" stroke="currentColor" strokeWidth="0.8" />
-                                      <path d="M 12 12 L 12 2 A 10 10 0 0 1 22 12 Z" fill="rgba(245,166,35,0.15)" stroke="none" />
-                                      <line x1="12" y1="12" x2="12" y2="2" stroke="currentColor" strokeWidth="1.5" />
-                                    </svg>
-                                  </div>
-                                  <span>SENTINEL AI</span>
-                                </div>
-                              )}
-                            </span>
-
                             {isUser ? (
                               <div 
                                 style={{ 
-                                  backgroundColor: 'rgba(245, 166, 35, 0.11)', 
-                                  borderColor: 'rgba(245, 166, 35, 0.3)' 
+                                  backgroundColor: 'rgba(245, 166, 35, 0.08)', 
+                                  borderColor: 'rgba(245, 166, 35, 0.25)',
+                                  borderRadius: '12px 4px 12px 12px',
+                                  boxShadow: '0 0 12px rgba(245, 166, 35, 0.05)',
+                                  padding: '12px 14px'
                                 }}
-                                className="p-3.5 border text-[var(--text-primary)] rounded-2xl rounded-tr-none text-xs leading-relaxed max-w-full font-body animate-fade-in shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                                className="border text-[var(--text-primary)] text-xs leading-relaxed w-full font-body animate-fade-in flex flex-col gap-1.5"
                               >
-                                {msg.text}
+                                <span className="text-[7.5px] text-[var(--text-secondary)] font-mono uppercase tracking-wider block text-left leading-none font-bold">
+                                  YOU
+                                </span>
+                                <div>{msg.text}</div>
+                                <span className="text-[7.5px] text-[var(--text-secondary)] font-mono tracking-wider block text-right mt-0.5 leading-none">
+                                  {msg.time}
+                                </span>
                               </div>
                             ) : (
-                              <div 
-                                className={`relative p-3.5 bg-[var(--bg-panel-raised)] border ${
-                                  msg.isError ? 'border-red-500/40 shadow-[0_0_12px_rgba(239,68,68,0.1)]' : 'border-[var(--border-subtle)]'
-                                } text-[var(--text-primary)] rounded-2xl rounded-tl-none text-xs leading-relaxed max-w-full shadow-[0_2px_8px_rgba(0,0,0,0.2)] animate-fade-in`}
-                              >
-                                <span className="absolute top-[-1px] left-[-1px] w-1.5 h-1.5 border-t border-l border-[var(--accent-amber)] rounded-tl-[var(--radius-sm)]" />
-                                <span className="absolute top-[-1px] right-[-1px] w-1.5 h-1.5 border-t border-r border-[var(--accent-amber)] rounded-tr-[var(--radius-sm)]" />
-                                <span className="absolute bottom-[-1px] left-[-1px] w-1.5 h-1.5 border-b border-l border-[var(--accent-amber)] rounded-bl-[var(--radius-sm)]" />
-                                <span className="absolute bottom-[-1px] right-[-1px] w-1.5 h-1.5 border-b border-r border-[var(--accent-amber)] rounded-br-[var(--radius-sm)]" />
-                                
-                                <div className="font-body whitespace-pre-wrap">{msg.text}</div>
-                                
-                                {(msg.source || msg.responseTime) && (
-                                  <div className="mt-2.5 pt-2 border-t border-[var(--border-subtle)]/30 flex items-center gap-2 justify-end">
-                                    {msg.source && (
-                                      <>
-                                        {msg.source.toLowerCase().includes('gemini') ? (
-                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider rounded-full border border-[var(--accent-amber)]/20 bg-amber-950/20 text-[var(--accent-amber)]">
-                                            ✦ GEMINI
-                                          </span>
-                                        ) : (
-                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider rounded-full border border-teal-400/20 bg-teal-950/20 text-teal-400">
-                                            ⚡ RULE-BASE
+                              <>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className="w-7 h-7 rounded-full bg-[var(--bg-panel-raised)] border border-[var(--accent-amber)]/60 flex items-center justify-center shrink-0">
+                                    <Activity className="w-3.5 h-3.5 text-[var(--accent-amber)] animate-pulse" />
+                                  </div>
+                                  <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">
+                                    SENTINEL AI
+                                  </span>
+                                </div>
+
+                                <div 
+                                  style={{ 
+                                    padding: '14px 16px',
+                                    borderLeft: '3px solid rgba(245, 166, 35, 0.4)',
+                                    borderRadius: '4px 12px 12px 12px'
+                                  }}
+                                  className={`relative bg-[var(--bg-panel-raised)] border ${
+                                    msg.isError ? 'border-red-500/40 shadow-[0_0_12px_rgba(239,68,68,0.1)]' : 'border-[var(--border-subtle)]'
+                                  } text-[var(--text-primary)] text-xs leading-relaxed w-full shadow-[0_2px_8px_rgba(0,0,0,0.2)] animate-fade-in flex flex-col gap-2.5`}
+                                >
+                                  <div className="font-body whitespace-pre-wrap">{msg.text}</div>
+                                  
+                                  {(msg.source || msg.responseTime || msg.time) && (
+                                    <div className="pt-2 border-t border-[var(--border-subtle)]/30 flex items-center justify-between gap-2 mt-1">
+                                      <div className="flex items-center">
+                                        {msg.source && (
+                                          msg.source.toLowerCase().includes('gemini') ? (
+                                            <span 
+                                              style={{ color: 'var(--accent-amber)', backgroundColor: 'rgba(245, 166, 35, 0.12)' }}
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10 select-none"
+                                            >
+                                              ✦ GEMINI
+                                            </span>
+                                          ) : (
+                                            <span 
+                                              style={{ color: 'var(--color-calm)', backgroundColor: 'rgba(45, 212, 191, 0.12)' }}
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10 select-none"
+                                            >
+                                              ⚡ RULE-BASE
+                                            </span>
+                                          )
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3">
+                                        {msg.responseTime && (
+                                          <span className="text-[9px] text-[var(--text-secondary)] font-mono">
+                                            {msg.responseTime}
                                           </span>
                                         )}
-                                      </>
-                                    )}
-                                    {msg.responseTime && (
-                                      <span className="text-[9px] text-[var(--text-secondary)] font-mono">
-                                        {msg.responseTime}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                                        <span className="text-[9px] text-[var(--text-secondary)] font-mono tracking-wider">
+                                          {msg.time}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
                             )}
-                            <span className="text-[7.5px] text-[var(--text-secondary)] mt-1 block px-1 font-mono tracking-wider">{msg.time}</span>
                           </div>
                         );
                       })}
@@ -2419,39 +3242,35 @@ export const Dashboard: React.FC = () => {
                   )}
 
                   {aiTyping && (
-                    <div className="flex flex-col max-w-[80%] mr-auto items-start relative z-10 animate-fade-in">
-                      <span className="text-[8px] text-[var(--text-secondary)] mb-1 block px-1 font-mono uppercase tracking-wider">
-                        <div className="flex items-center gap-1">
-                          <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
-                            <svg 
-                              className="w-full h-full text-[var(--accent-amber)]" 
-                              viewBox="0 0 24 24" 
-                              fill="none" 
-                              stroke="currentColor" 
-                              strokeWidth="1.5"
-                              style={{ 
-                                animation: 'radar-spin-tiny 3s linear infinite',
-                                transformOrigin: '12px 12px'
-                              }}
-                            >
-                              <circle cx="12" cy="12" r="10" strokeDasharray="3 3" stroke="currentColor" strokeWidth="0.8" />
-                              <path d="M 12 12 L 12 2 A 10 10 0 0 1 22 12 Z" fill="rgba(245,166,35,0.15)" stroke="none" />
-                              <line x1="12" y1="12" x2="12" y2="2" stroke="currentColor" strokeWidth="1.5" />
-                            </svg>
-                          </div>
-                          <span>SENTINEL AI</span>
+                    <div className="flex flex-col max-w-[80%] mr-auto items-start relative z-10 animate-fade-in w-full mb-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-7 h-7 rounded-full bg-[var(--bg-panel-raised)] border border-[var(--accent-amber)]/60 flex items-center justify-center shrink-0">
+                          <Activity className="w-3.5 h-3.5 text-[var(--accent-amber)] animate-pulse" />
                         </div>
-                      </span>
+                        <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">
+                          SENTINEL AI
+                        </span>
+                      </div>
 
-                      <div className="relative px-4 py-3 bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] rounded-2xl rounded-tl-none shadow-[0_2px_8px_rgba(0,0,0,0.2)] flex items-center gap-1.5">
-                        <span className="absolute top-[-1px] left-[-1px] w-1.5 h-1.5 border-t border-l border-[var(--accent-amber)] rounded-tl-[var(--radius-sm)]" />
-                        <span className="absolute top-[-1px] right-[-1px] w-1.5 h-1.5 border-t border-r border-[var(--accent-amber)] rounded-tr-[var(--radius-sm)]" />
-                        <span className="absolute bottom-[-1px] left-[-1px] w-1.5 h-1.5 border-b border-l border-[var(--accent-amber)] rounded-bl-[var(--radius-sm)]" />
-                        <span className="absolute bottom-[-1px] right-[-1px] w-1.5 h-1.5 border-b border-r border-[var(--accent-amber)] rounded-br-[var(--radius-sm)]" />
+                      <div 
+                        style={{ 
+                          padding: '14px 16px',
+                          borderLeft: '3px solid rgba(245, 166, 35, 0.4)',
+                          borderRadius: '4px 12px 12px 12px'
+                        }}
+                        className="relative bg-[var(--bg-panel-raised)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs leading-relaxed w-full shadow-[0_2px_8px_rgba(0,0,0,0.2)] animate-fade-in flex flex-col gap-2.5"
+                      >
+                        <div className="flex items-center gap-1.5 h-4">
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                        </div>
                         
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-[typing-dot-1_1.4s_infinite]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-[typing-dot-2_1.4s_infinite] [animation-delay:0.2s]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-[typing-dot-3_1.4s_infinite] [animation-delay:0.4s]" />
+                        <div className="pt-2 border-t border-[var(--border-subtle)]/30 flex items-center justify-between mt-1">
+                          <span className="text-[8px] font-mono font-bold text-[var(--accent-amber)] flex items-center gap-1">
+                            ● PROCESSING...
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2464,31 +3283,48 @@ export const Dashboard: React.FC = () => {
                   onSubmit={handleSendChat} 
                   className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-panel)] flex items-center gap-3 shrink-0 relative z-10"
                 >
-                  <input
-                    ref={chatInputRef}
-                    type="text"
-                    required
-                    value={chatInput}
-                    onFocus={() => setInputFocused(true)}
-                    onBlur={() => setInputFocused(false)}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask SENTINEL AI..."
-                    className="flex-1 bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] rounded-[var(--radius-sm)] px-4 py-3 text-xs text-white outline-none placeholder-[var(--text-muted)] transition-all font-sans"
-                  />
+                  <div className="flex-1 relative flex items-center">
+                    <input
+                      ref={chatInputRef}
+                      type="text"
+                      required
+                      value={chatInput}
+                      onFocus={() => setInputFocused(true)}
+                      onBlur={() => setInputFocused(false)}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Ask SENTINEL AI..."
+                      style={{ 
+                        borderLeft: inputFocused ? '3px solid rgba(245, 166, 35, 0.6)' : '3px solid rgba(245, 166, 35, 0.2)' 
+                      }}
+                      className="w-full bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] rounded-[var(--radius-sm)] px-4 py-3 text-xs text-white outline-none placeholder-[var(--text-muted)] transition-all font-sans"
+                    />
+                  </div>
                   
-                  {inputFocused && (
-                    <span className="text-[9px] text-[var(--text-secondary)] font-mono transition-opacity duration-200 animate-fade-in shrink-0">
-                      Enter ↵ to send
-                    </span>
-                  )}
-                  
-                  <GlowButton
-                    type="submit"
-                    variant="primary"
-                    className="px-5 py-3 text-xs font-bold font-sans uppercase tracking-wider min-w-[70px] flex items-center justify-center shrink-0"
+                  <span 
+                    className="text-[9px] text-[var(--text-secondary)] font-mono transition-opacity duration-200 shrink-0 font-semibold"
+                    style={{ opacity: inputFocused ? 1 : 0 }}
                   >
-                    Send
-                  </GlowButton>
+                    Enter ↵ to send
+                  </span>
+                  
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim()}
+                    className={`group relative overflow-hidden px-5 py-3 text-xs font-bold font-sans uppercase tracking-wider min-w-[90px] flex items-center justify-center gap-1.5 shrink-0 rounded-[var(--radius-sm)] transition-all duration-200 active:scale-95 border ${
+                      chatInput.trim()
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 border-amber-500/50 cursor-pointer text-white shadow-[0_0_8px_rgba(245,166,35,0.15)]'
+                        : 'bg-slate-900 border-[var(--border-subtle)] cursor-not-allowed text-slate-500'
+                    }`}
+                  >
+                    {chatInput.trim() && (
+                      <div 
+                        className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_0.4s_ease-out]"
+                        style={{ backgroundSize: '200% 100%' }}
+                      />
+                    )}
+                    <Send className="w-3.5 h-3.5" />
+                    <span>SEND</span>
+                  </button>
                 </form>
               </GlowPanel>
             </div>
