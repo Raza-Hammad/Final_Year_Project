@@ -1,12 +1,56 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: main.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file is the Main Entry Point and Primary Router of the FastAPI backend application!
+It configures the FastAPI web server, initializes database tables and ML models on startup,
+defines CORS middleware, sets up rate limiters, handles user authentication routes,
+and exposes REST API endpoints for threat detection, simulator controls, alert exports (PDF/CSV),
+Explainable AI (XAI), and the Sentinel AI SOC Assistant.
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `@asynccontextmanager lifespan()`: Executes startup tasks when FastAPI boots:
+   - Initializes database tables (`init_db()`).
+   - Pre-loads machine learning models (`CascadeDetector`) into memory.
+   - Pre-loads simulator test dataset mappings (`simulator_engine.initialize()`).
+2. Authentication Endpoints (`/api/auth/login`, `/api/auth/logout`, `/api/users/me`):
+   - Logs users in and returns signed JWT tokens.
+3. Prediction Endpoint (`/api/predict`):
+   - Receives network feature vectors, runs 3-Tier ML Cascade classification, persists alerts, and broadcasts to WebSockets.
+4. Simulator Endpoints (`/api/simulate/start`, `/api/simulate/stop`, `/api/simulate/status`):
+   - Controls real-time threat scenario simulation.
+5. Alert Management Endpoints (`/api/alerts`, `/api/alerts/stats`, `/api/alerts/export`):
+   - Fetches historical security alerts and exports PDF / CSV session reports.
+6. Model Metrics & SMOTE Stats (`/api/models/metrics`, `/api/data/smote-stats`):
+   - Returns evaluation metrics and Before/After SMOTE oversampling class ratios to the UI.
+7. Sentinel AI Assistant Router (`/api/chat`, `/api/conversations`):
+   - Routes user SOC questions to offline Rule-Based logic or live Google Gemini AI with key rotation.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `fastapi.FastAPI`, `Depends`, `HTTPException`: Core REST API framework and dependency injection.
+- `slowapi.Limiter`: Rate-limiting library protecting endpoints against brute-force flooding.
+- `reportlab.platypus`: Generates dynamic, professional PDF security reports for alert exports.
+- `google.generativeai` (Gemini): Google's Generative AI SDK powering the SOC Chatbot.
+- `sqlmodel.Session`, `select`: Database ORM query builder.
+===============================================================================
+"""
+
 import json
 import logging
 import asyncio
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlmodel import Session, select, func
 from datetime import datetime, timedelta
 from typing import Optional
@@ -14,15 +58,19 @@ from io import BytesIO
 
 from app.config import settings
 from app.db import (
-    engine, init_db, get_session, User, Alert, UserCreate, UserResponse, Token, PredictionRequest
+    engine, init_db, get_session, User, Alert, UserCreate, UserResponse, Token, PredictionRequest,
+    Conversation, ChatMessage, ConversationSummary, ChatMessageResponse, ConversationDetail, ConversationUpdate
 )
 from app.auth import (
-    get_password_hash, verify_password, create_access_token, get_current_user
+    get_password_hash, verify_password, create_access_token, get_current_user,
+    decode_token, revoke_token, oauth2_scheme, get_user_by_username
 )
+from jose import JWTError
 from app.ml.cascade import CascadeDetector, get_detector
 from app.ml.severity import compute_severity
 from app.ml.metadata_helper import get_raw_flow_metadata
 from app.simulator import simulator_engine
+from app.ws_manager import manager, broadcast_detection
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
@@ -39,50 +87,11 @@ class XaiRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    conversation_id: Optional[int] = None
+    incognito: bool = False
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-# --- WEBSOCKET CONNECTION MANAGER ---
-
-class ConnectionManager:
-    """Manages active live WebSocket connections for real-time telemetry."""
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"New client connected to WebSocket. Total clients: {len(self.active_connections)}")
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            logger.info(f"Client disconnected from WebSocket. Total clients: {len(self.active_connections)}")
-
-    async def broadcast(self, message: dict):
-        """Sends a JSON-serializable dictionary to all active WebSocket clients."""
-        disconnected = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception as e:
-                logger.warning(f"Error broadcasting to client: {e}")
-                disconnected.append(connection)
-        for connection in disconnected:
-            self.disconnect(connection)
-
-# Global connection manager instance
-manager = ConnectionManager()
-
-async def broadcast_detection(result: dict):
-    """Broadcasting helper to send threat classification results to the live feed."""
-    event = {
-        "event": "detection",
-        "data": result,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-    await manager.broadcast(event)
 
 async def send_heartbeat():
     """Periodic background worker sending heartbeat ping event to connected frontends."""
@@ -173,6 +182,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Rate limiting — protects auth endpoints from brute-force/credential-stuffing attempts
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Configure CORS specifically for Vite dev server and local script probes
 origins = [
     "http://localhost:5173",
@@ -205,7 +219,8 @@ def health_check():
 # --- AUTHENTICATION ROUTES ---
 
 @app.post("/api/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register_user(user_in: UserCreate, session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def register_user(request: Request, user_in: UserCreate, session: Session = Depends(get_session)):
     """Public endpoint to register a new user analyst account."""
     # Check if user already exists
     statement = select(User).where(User.username == user_in.username)
@@ -225,7 +240,8 @@ def register_user(user_in: UserCreate, session: Session = Depends(get_session)):
     return new_user
 
 @app.post("/api/auth/login", response_model=Token)
-def login_user(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+@limiter.limit("5/minute")
+def login_user(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
     """Authenticates username/password and returns a JWT token containing sub + role claims."""
     statement = select(User).where(User.username == form_data.username)
     user = session.exec(statement).first()
@@ -242,6 +258,19 @@ def login_user(form_data: OAuth2PasswordRequestForm = Depends(), session: Sessio
         data={"sub": user.username, "role": user.role}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/api/auth/logout")
+def logout_user(token: str = Depends(oauth2_scheme)):
+    """Revokes the presented token's jti so it can no longer be used to authenticate (Protected)."""
+    try:
+        payload = decode_token(token)
+    except JWTError:
+        # Already invalid/expired -- logging out is a no-op, not an error.
+        return {"status": "logged_out"}
+    jti = payload.get("jti")
+    if jti:
+        revoke_token(jti)
+    return {"status": "logged_out"}
 
 @app.get("/api/users/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
@@ -268,9 +297,10 @@ async def predict_flow(
         # Run detection (needs to run in main thread or run pool if blocking, but it's fast enough)
         result = detector.detect(request.features)
     except Exception as e:
+        logger.error(f"Inference failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Inference failed: {e}"
+            detail="Inference failed. Check that the submitted features match the expected schema."
         )
         
     label = result["predicted_label"]
@@ -314,11 +344,12 @@ async def predict_flow(
 import google.generativeai as genai
 from app.services.gemini_key_manager import GeminiKeyManager
 
-try:
-    key_manager = GeminiKeyManager()
-    genai.configure(api_key=key_manager.get_current_key())
-except Exception as gem_err:
-    logger.error(f"Failed to initialize Gemini client: {gem_err}")
+key_manager = GeminiKeyManager()
+if key_manager.keys:
+    try:
+        genai.configure(api_key=key_manager.get_current_key())
+    except Exception as gem_err:
+        logger.error(f"Failed to initialize Gemini client: {gem_err}")
 
 def is_quota_error(e: Exception) -> bool:
     err_str = str(e).lower()
@@ -440,7 +471,7 @@ async def explain_packet(
 RULES_QA = [
     {
         "keywords": ["how does the cascade work", "cascade logic", "explain cascade", "cascade pipeline"],
-        "answer": "The threat detection system utilizes a 3-tier cascade to maximize throughput and explainability. Tier 1 (LightGBM) screens 90%+ clear-cut benign flows instantly (~10μs). Tier 2 (Random Forest) validates uncertain cases (~3μs). Low-confidence anomalies escalate to Tier 3 (Expert Ensemble) for a weighted vote (LGBM 0.2 / RF 0.3 / XGB 0.5) to resolve the final alert verdict.",
+        "answer": "The threat detection system utilizes a 3-tier cascade to maximize accuracy and explainability. Tier 1 (LightGBM) screens every incoming flow first — it is selected for its highest overall accuracy (99.472%), not speed — and resolves the clear majority of decisions with high confidence. Tier 2 (Random Forest) validates the remaining uncertain cases and is actually the fastest model at inference (~2.88μs), also driving the system's explainability. Low-confidence anomalies escalate to Tier 3 (Expert Ensemble) for a weighted vote (LGBM 0.2 / RF 0.3 / XGB 0.5) to resolve the final alert verdict.",
         "source": "Rule-Based"
     },
     {
@@ -470,24 +501,56 @@ RULES_QA = [
     }
 ]
 
+def _save_chat_turn(
+    session: Session, user: User, conversation_id: Optional[int],
+    user_msg: str, answer: str, source: str, incognito: bool
+) -> Optional[int]:
+    """Persists a user+assistant message pair to a Conversation, creating one if
+    needed. Returns None (no-op) when incognito, so nothing is ever written."""
+    if incognito:
+        return None
+
+    conversation: Optional[Conversation] = None
+    if conversation_id is not None:
+        conversation = session.get(Conversation, conversation_id)
+        if conversation is not None and conversation.user_id != user.id:
+            conversation = None  # not owned by this user -- start a fresh one instead
+
+    if conversation is None:
+        title = user_msg[:60] + ("…" if len(user_msg) > 60 else "")
+        conversation = Conversation(user_id=user.id, title=title or "New conversation")
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+
+    session.add(ChatMessage(conversation_id=conversation.id, role="user", content=user_msg))
+    session.add(ChatMessage(conversation_id=conversation.id, role="assistant", content=answer, source=source))
+    conversation.updated_at = datetime.utcnow()
+    session.add(conversation)
+    session.commit()
+    return conversation.id
+
+
 @app.post("/api/chat")
 async def chat_assistant(
     req: ChatRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Provides security operations intelligence through rule-based lookup and Gemini fallback (Protected)."""
+    """Provides security operations intelligence through Gemini (primary, with
+    per-conversation memory) and rule-based/offline fallback when Gemini is
+    unavailable (Protected). Persists the turn to a Conversation unless incognito."""
     user_msg = req.message.strip()
     user_msg_lower = user_msg.lower()
-    
-    # 1. Check for "explain last alert" trigger
+
+    # 1. Check for "explain last alert" trigger -- real DB context, useful to
+    # both the Gemini prompt and the rule-based/offline fallback text.
     is_last_alert_query = any(k in user_msg_lower for k in [
         "last alert", "last threat", "last attack", "latest alert", "latest threat", "latest attack", "explain the last"
     ])
-    
+
     latest_alert_details = None
     if is_last_alert_query:
-        # Retrieve latest alert from DB
         stmt = select(Alert).order_by(Alert.id.desc()).limit(1)
         alert = session.exec(stmt).first()
         if alert:
@@ -495,14 +558,14 @@ async def chat_assistant(
                 features = json.loads(alert.raw_features)
             except Exception:
                 features = {}
-                
+
             detector = getattr(app.state, "detector", None) or get_detector()
             try:
                 result = detector.detect(features)
                 top_feats = result.get("top_features", [])
             except Exception:
                 top_feats = []
-                
+
             feats_str = ", ".join([f"'{f['feature']}'={f['value']:.2f} (benign avg: {f['benign_avg']:.2f})" for f in top_feats])
             latest_alert_details = (
                 f"Latest logged alert [ID {alert.id}] at {alert.timestamp.strftime('%Y-%m-%d %H:%M:%S')}. "
@@ -512,22 +575,17 @@ async def chat_assistant(
         else:
             latest_alert_details = "No alerts have been recorded in the database yet."
 
-        if not key_manager.keys:
-            return {
-                "answer": f"Here is the details of the latest logged security event:\n{latest_alert_details}",
-                "source": "Rule-Based"
-            }
+    last_alert_fallback_text = (
+        f"Here is the details of the latest logged security event:\n{latest_alert_details}"
+        if latest_alert_details else None
+    )
 
-    # 2. Check for rule-based keywords
-    if not is_last_alert_query:
-        for rule in RULES_QA:
-            if any(kw in user_msg_lower for kw in rule["keywords"]):
-                return {
-                    "answer": rule["answer"],
-                    "source": rule["source"]
-                }
-                
-    # 3. Fall back to Gemini API if configured
+    answer: Optional[str] = None
+    source: Optional[str] = None
+
+    # 2. Gemini is the primary engine when configured -- it gets real
+    # conversation memory (prior turns from this Conversation) so follow-up
+    # questions stay coherent, not just single-shot Q&A.
     if key_manager.keys:
         system_instruction = (
             "You are a helpful, professional cybersecurity operations center (SOC) AI assistant for this Threat Simulator portal. "
@@ -536,77 +594,85 @@ async def chat_assistant(
             "\"My operational scope covers cybersecurity threats, network intrusion analysis, the THREATSIM detection system, and SOC analyst workflows. For [topic], I'd recommend a general-purpose AI. How can I help with your security analysis?\"\n"
             "Substitute [topic] with the actual off-topic subject mentioned by the user."
         )
-        
-        prompt = f"{system_instruction}\n\n"
+
+        # Prior turns from this conversation, translated to Gemini's role naming.
+        gemini_history = []
+        if req.conversation_id is not None and not req.incognito:
+            prior = session.exec(
+                select(ChatMessage)
+                .where(ChatMessage.conversation_id == req.conversation_id)
+                .order_by(ChatMessage.id.asc())
+                .limit(20)
+            ).all()
+            gemini_history = [
+                {"role": "model" if m.role == "assistant" else "user", "parts": [m.content]}
+                for m in prior
+            ]
+
+        message_text = user_msg
         if latest_alert_details:
-            prompt += f"Context on the latest recorded security threat alert: {latest_alert_details}\n\n"
-            
-        prompt += f"User message: {user_msg}"
-        
+            message_text = f"Context on the latest recorded security threat alert: {latest_alert_details}\n\nUser message: {user_msg}"
+
         MAX_RETRIES = min(10, len(key_manager.keys))
         last_error = None
-        
+
         for attempt in range(MAX_RETRIES):
             current_key = key_manager.get_current_key()
             try:
                 genai.configure(api_key=current_key)
-                model = genai.GenerativeModel('gemini-2.5-flash')
-                
+                model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_instruction)
+
                 loop = asyncio.get_running_loop()
                 def call_gemini():
-                    res = model.generate_content(prompt)
+                    chat = model.start_chat(history=gemini_history)
+                    res = chat.send_message(message_text)
                     return res.text.strip()
-                    
+
                 answer = await loop.run_in_executor(None, call_gemini)
                 answer = answer.replace("*", "").replace("`", "").strip()
-                
-                # Success - rotate to spread load evenly
-                key_manager.rotate()
-                
-                return {
-                    "answer": answer,
-                    "source": "AI Gemini"
-                }
+                source = "AI Gemini"
+                key_manager.rotate()  # success -- spread load evenly next time
+                break
             except Exception as e:
                 if is_quota_error(e):
                     logger.warning(f"Gemini API quota error on key index {key_manager.keys.index(current_key)}: {e}")
                     key_manager.mark_exhausted(current_key)
                     last_error = e
-                    continue  # Try next key instantly
+                    continue  # try next key instantly
                 else:
                     logger.error(f"Gemini API non-quota error: {e}")
-                    if is_last_alert_query and latest_alert_details:
-                        return {
-                            "answer": f"Here is the details of the latest logged security event:\n{latest_alert_details}",
-                            "source": "Rule-Based"
-                        }
-                    return {
-                        "answer": "I'm having trouble right now — please try again in a moment.",
-                        "source": "Error Fallback"
-                    }
-                    
-        # All keys exhausted
-        logger.error(f"All Gemini API keys exhausted. Last error: {last_error}")
-        if is_last_alert_query and latest_alert_details:
-            return {
-                "answer": f"Here is the details of the latest logged security event:\n{latest_alert_details}",
-                "source": "Rule-Based"
-            }
-        return {
-            "answer": "Our AI is experiencing high demand right now. Your rule-based answers are still available.",
-            "source": "Error Fallback"
-        }
-            
-    # 4. Fallback response if offline
-    if is_last_alert_query and latest_alert_details:
-        return {
-            "answer": f"Here is a summary of the latest security event:\n{latest_alert_details}",
-            "source": "Rule-Based"
-        }
-        
+                    last_error = e
+                    break
+
+        if answer is None:
+            logger.error(f"Gemini unavailable after retries. Last error: {last_error}")
+
+    # 3. Rule-based keyword match -- used when Gemini isn't configured or failed.
+    if answer is None and not is_last_alert_query:
+        for rule in RULES_QA:
+            if any(kw in user_msg_lower for kw in rule["keywords"]):
+                answer = rule["answer"]
+                source = rule["source"]
+                break
+
+    # 4. Last-alert detail text, or a generic offline notice.
+    if answer is None:
+        if last_alert_fallback_text:
+            answer = last_alert_fallback_text
+            source = "Rule-Based"
+        elif key_manager.keys:
+            answer = "Our AI is experiencing high demand right now. Your rule-based answers are still available."
+            source = "Error Fallback"
+        else:
+            answer = "I am currently operating in offline mode. Please ask about the cascade architecture, simulator presets, or specific threat types (DDoS, Port Scan, Brute Force)."
+            source = "Offline Fallback"
+
+    conversation_id = _save_chat_turn(session, current_user, req.conversation_id, user_msg, answer, source, req.incognito)
+
     return {
-        "answer": "I am currently operating in offline mode. Please ask about the cascade architecture, simulator presets, or specific threat types (DDoS, Port Scan, Brute Force).",
-        "source": "Offline Fallback"
+        "answer": answer,
+        "source": source,
+        "conversation_id": conversation_id
     }
 
 
@@ -624,6 +690,110 @@ def get_chat_status(
         "keys_available": keys_available,
         "keys_exhausted": keys_exhausted
     }
+
+
+# --- CONVERSATION HISTORY (AI ASSISTANT) ---
+
+@app.get("/api/conversations", response_model=list[ConversationSummary])
+def list_conversations(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Lists the current user's saved conversations, pinned first then
+    newest-updated (Protected). Conversations started in incognito mode never
+    exist here -- there's nothing to list."""
+    conversations = session.exec(
+        select(Conversation)
+        .where(Conversation.user_id == current_user.id)
+        .order_by(Conversation.pinned.desc(), Conversation.updated_at.desc())
+    ).all()
+
+    summaries = []
+    for c in conversations:
+        messages = session.exec(
+            select(ChatMessage).where(ChatMessage.conversation_id == c.id).order_by(ChatMessage.id.desc()).limit(1)
+        ).all()
+        last = messages[0] if messages else None
+        count = session.exec(select(func.count()).select_from(ChatMessage).where(ChatMessage.conversation_id == c.id)).one()
+        summaries.append(ConversationSummary(
+            id=c.id, title=c.title, pinned=c.pinned, created_at=c.created_at, updated_at=c.updated_at,
+            message_count=count,
+            preview=(last.content[:80] + ("…" if len(last.content) > 80 else "")) if last else None
+        ))
+    return summaries
+
+
+@app.get("/api/conversations/{conversation_id}", response_model=ConversationDetail)
+def get_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Returns a single conversation's full message history (Protected, owner-only)."""
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None or conversation.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+
+    messages = session.exec(
+        select(ChatMessage).where(ChatMessage.conversation_id == conversation_id).order_by(ChatMessage.id.asc())
+    ).all()
+    return ConversationDetail(
+        id=conversation.id, title=conversation.title, pinned=conversation.pinned,
+        created_at=conversation.created_at, updated_at=conversation.updated_at,
+        messages=[ChatMessageResponse(id=m.id, role=m.role, content=m.content, source=m.source, created_at=m.created_at) for m in messages]
+    )
+
+
+@app.patch("/api/conversations/{conversation_id}", response_model=ConversationSummary)
+def update_conversation(
+    conversation_id: int,
+    req: ConversationUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Partially updates a conversation -- rename and/or pin/unpin (Protected, owner-only)."""
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None or conversation.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+
+    if req.title is not None:
+        title = req.title.strip()
+        if not title:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title cannot be empty.")
+        conversation.title = title[:100]
+
+    if req.pinned is not None:
+        conversation.pinned = req.pinned
+
+    session.add(conversation)
+    session.commit()
+    session.refresh(conversation)
+
+    count = session.exec(select(func.count()).select_from(ChatMessage).where(ChatMessage.conversation_id == conversation.id)).one()
+    return ConversationSummary(
+        id=conversation.id, title=conversation.title, pinned=conversation.pinned,
+        created_at=conversation.created_at, updated_at=conversation.updated_at,
+        message_count=count, preview=None
+    )
+
+
+@app.delete("/api/conversations/{conversation_id}")
+def delete_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Deletes a conversation and all its messages (Protected, owner-only)."""
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None or conversation.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+
+    messages = session.exec(select(ChatMessage).where(ChatMessage.conversation_id == conversation_id)).all()
+    for m in messages:
+        session.delete(m)
+    session.delete(conversation)
+    session.commit()
+    return {"status": "deleted", "conversation_id": conversation_id}
 
 
 @app.get("/api/models/metrics")
@@ -672,9 +842,10 @@ def get_models_metrics():
             "feature_importances": feature_importances
         }
     except Exception as e:
+        logger.error(f"Failed to read evaluation metrics: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read evaluation metrics: {e}"
+            detail="Failed to read evaluation metrics. Ensure models are trained and cached correctly."
         )
 
 # --- ALERTS LOG RETRIEVAL & STATS ---
@@ -683,6 +854,7 @@ def get_models_metrics():
 def get_alerts(
     attack_type: Optional[str] = None,
     tier: Optional[int] = None,
+    severity: Optional[str] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     page: int = 1,
@@ -692,12 +864,14 @@ def get_alerts(
 ):
     """Returns a list of threat alerts from SQLite with support for filtering and pagination (Protected)."""
     statement = select(Alert)
-    
+
     # Apply filters
     if attack_type:
         statement = statement.where(Alert.predicted_label == attack_type)
     if tier is not None:
         statement = statement.where(Alert.tier == tier)
+    if severity:
+        statement = statement.where(Alert.severity == severity)
     if date_from:
         statement = statement.where(Alert.timestamp >= date_from)
     if date_to:
@@ -752,7 +926,7 @@ def get_alerts_stats(
 
 
 @app.get("/api/data/smote-stats")
-def get_smote_stats():
+def get_smote_stats(current_user: User = Depends(get_current_user)):
     """Reads and returns the oversampling stats generated by the SMOTE data preprocessor (Protected)."""
     smote_path = Path(settings.DATA_CACHE_DIR) / "smote_stats.json"
     if not smote_path.exists():
@@ -764,15 +938,16 @@ def get_smote_stats():
         with open(smote_path, "r") as f:
             return json.load(f)
     except Exception as e:
+        logger.error(f"Failed to read SMOTE stats: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read SMOTE stats: {str(e)}"
+            detail="Failed to read SMOTE stats."
         )
 
 
 @app.get("/api/data/benign-baseline")
-def get_benign_baseline():
-    """Reads and returns the precomputed benign average values for top features."""
+def get_benign_baseline(current_user: User = Depends(get_current_user)):
+    """Reads and returns the precomputed benign average values for top features (Protected)."""
     baseline_path = Path(settings.DATA_CACHE_DIR) / "benign_averages.json"
     if not baseline_path.exists():
         raise HTTPException(
@@ -783,9 +958,10 @@ def get_benign_baseline():
         with open(baseline_path, "r") as f:
             return json.load(f)
     except Exception as e:
+        logger.error(f"Failed to read benign averages: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read benign averages: {str(e)}"
+            detail="Failed to read benign averages."
         )
 
 
@@ -794,6 +970,7 @@ def export_alerts(
     format: str = "pdf",
     attack_type: Optional[str] = None,
     tier: Optional[int] = None,
+    severity: Optional[str] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     current_user: User = Depends(get_current_user),
@@ -805,6 +982,8 @@ def export_alerts(
         statement = statement.where(Alert.predicted_label == attack_type)
     if tier is not None:
         statement = statement.where(Alert.tier == tier)
+    if severity:
+        statement = statement.where(Alert.severity == severity)
     if date_from:
         statement = statement.where(Alert.timestamp >= date_from)
     if date_to:
@@ -1028,8 +1207,8 @@ async def simulate_start(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Simulation rate must be at least 1 packet per second."
         )
-    from app.simulator.simulator import SCENARIOS
-    valid_ids = list(SCENARIOS.keys()) + ["ddos_storm"]
+    from app.simulator.simulator import SCENARIOS, LEGACY_SCENARIO_ALIASES
+    valid_ids = list(SCENARIOS.keys()) + list(LEGACY_SCENARIO_ALIASES.keys())
     if req.scenario not in valid_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1049,10 +1228,16 @@ async def simulate_start(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(ve)
         )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cascade assets (scaler, encoder, or features list) are missing. Run prepare_data first."
+        )
     except Exception as e:
+        logger.error(f"Failed to start simulation: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start simulation: {e}"
+            detail="Failed to start simulation."
         )
 
 @app.post("/api/simulate/stop")
@@ -1075,8 +1260,25 @@ def simulate_status(current_user: User = Depends(get_current_user)):
 # --- WEBSOCKET LIVE ROUTE ---
 
 @app.websocket("/ws/live")
-async def websocket_live_endpoint(websocket: WebSocket):
-    """Exposes real-time event socket feed for dashboard synchronization."""
+async def websocket_live_endpoint(websocket: WebSocket, token: Optional[str] = None, session: Session = Depends(get_session)):
+    """Exposes real-time event socket feed for dashboard synchronization (Protected via ?token= query param).
+
+    Browsers' native WebSocket API can't set an Authorization header, so the JWT is
+    passed as a query parameter instead. Validated before accept() so an unauthenticated
+    caller never receives a live connection.
+    """
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    try:
+        payload = decode_token(token)
+        username = payload.get("sub")
+        if not username or get_user_by_username(username, session) is None:
+            raise JWTError("Unknown user")
+    except JWTError:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await manager.connect(websocket)
     try:
         while True:

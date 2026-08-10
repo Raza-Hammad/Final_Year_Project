@@ -1,37 +1,74 @@
 import React, { useState } from 'react';
-import RadarBackground from '../components/ui/RadarBackground';
 import GlowPanel from '../components/ui/GlowPanel';
 import GlowButton from '../components/ui/GlowButton';
 import StatusBadge from '../components/ui/StatusBadge';
-import { Shield, Settings, Info, RefreshCw, Terminal } from 'lucide-react';
+import Logomark from '../components/ui/Logomark';
+import { RefreshCw } from 'lucide-react';
+
+const SWATCHES: { label: string; varName: string }[] = [
+  { label: 'Page', varName: '--sr-bg-page' },
+  { label: 'Surface', varName: '--sr-bg-surface' },
+  { label: 'Surface raised', varName: '--sr-bg-surface-raised' },
+  { label: 'Accent', varName: '--sr-accent' },
+  { label: 'Accent hover', varName: '--sr-accent-hover' },
+];
+
+const STATUS_SWATCHES: { label: string; varName: string }[] = [
+  { label: 'Critical', varName: '--sr-sev-critical' },
+  { label: 'High', varName: '--sr-sev-high' },
+  { label: 'Medium', varName: '--sr-sev-medium' },
+  { label: 'Low', varName: '--sr-sev-low' },
+  { label: 'Info', varName: '--sr-sev-info' },
+];
+
+const CATEGORICAL_SWATCHES: { label: string; varName: string }[] = [
+  { label: 'Tier 1', varName: '--sr-cat-1' },
+  { label: 'Tier 2', varName: '--sr-cat-2' },
+  { label: 'Tier 3', varName: '--sr-cat-3' },
+];
+
+const Swatch: React.FC<{ label: string; varName: string }> = ({ label, varName }) => (
+  <div className="flex flex-col gap-2">
+    <div
+      className="h-14 rounded-[var(--sr-radius-sm)] border border-[var(--sr-border-hairline)]"
+      style={{ backgroundColor: `var(${varName})` }}
+    />
+    <div>
+      <p className="text-xs font-medium text-[var(--sr-text-primary)]">{label}</p>
+      <p className="text-[11px] text-[var(--sr-text-muted)]" style={{ fontVariantNumeric: 'tabular-nums' }}>{varName}</p>
+    </div>
+  </div>
+);
 
 export const DesignSystemDemo: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [inputValue, setInputValue] = useState('10');
 
   const handleSimulate = () => {
     setLoading(true);
-    setTimeout(() => setLoading(false), 2000);
+    setTimeout(() => setLoading(false), 1500);
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative overflow-hidden flex flex-col items-center justify-center p-8 select-none">
-      {/* Signature Rotating Radar Background Sweep */}
-      <RadarBackground />
+    <div
+      className="min-h-screen bg-[var(--sr-bg-page)] text-[var(--sr-text-primary)] px-6 py-12 sm:px-10"
+      style={{ fontFamily: 'var(--sr-font-sans)' }}
+    >
+      <div className="mx-auto w-full max-w-5xl space-y-10">
 
-      {/* Main Console HUD container */}
-      <div className="relative z-10 w-full max-w-4xl space-y-8">
-        
-        {/* Header HUD panel */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[var(--border-subtle)] pb-6">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight font-display text-white uppercase flex items-center gap-3">
-              <Shield className="w-8 h-8 text-[var(--accent-amber)] animate-pulse" />
-              SOC Command Center
-            </h1>
-            <p className="text-[var(--text-secondary)] text-xs mt-1">
-              Design System Token Foundation & Reusable HUD Component Specs
-            </p>
+        {/* Header */}
+        <div className="flex flex-col gap-2 border-b border-[var(--sr-border-hairline)] pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--sr-radius-sm)] bg-[var(--sr-accent-soft)]">
+              <Logomark className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--sr-text-primary)]" style={{ fontFamily: 'var(--sr-font-display)' }}>
+                Cascadyx — Design System
+              </h1>
+              <p className="text-sm text-[var(--sr-text-secondary)]">
+                "Signal Room" — light, restrained, one accent color
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
             <StatusBadge status="Secure" />
@@ -39,131 +76,108 @@ export const DesignSystemDemo: React.FC = () => {
           </div>
         </div>
 
-        {/* 2-Column HUD Layout Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* Column 1: Typography and Badges Specs (Span 1) */}
-          <div className="md:col-span-1 space-y-6">
-            
-            <GlowPanel>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-[var(--border-subtle)] pb-2 flex items-center gap-2">
-                <Terminal className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
-                Severity Badges
-              </h3>
-              <div className="flex flex-wrap gap-3">
-                <StatusBadge status="Critical" />
-                <StatusBadge status="High" />
-                <StatusBadge status="Medium" />
-                <StatusBadge status="Low" />
-                <StatusBadge status="Info" />
-                <StatusBadge status="Secure" />
-                <StatusBadge status="Active" />
-              </div>
-            </GlowPanel>
-
-            <GlowPanel>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-[var(--border-subtle)] pb-2 flex items-center gap-2">
-                <Settings className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
-                Control Readout
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[var(--text-secondary)] text-[10px] uppercase font-semibold block mb-1.5">
-                    Simulation Packet Rate (pkts/sec)
-                  </label>
-                  <input
-                    type="number"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    className="w-full bg-[var(--bg-base)] border border-[var(--border-subtle)] focus:border-[var(--accent-amber)] rounded-[var(--radius-sm)] py-2 px-3 text-xs text-white font-mono outline-none transition-all"
-                  />
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <GlowButton variant="primary" className="flex-1" onClick={handleSimulate} disabled={loading}>
-                    {loading ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      'Simulate'
-                    )}
-                  </GlowButton>
-                </div>
-              </div>
-            </GlowPanel>
-
+        {/* Color palette */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-[var(--sr-text-primary)]">Surfaces &amp; accent</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            {SWATCHES.map((s) => <Swatch key={s.varName} {...s} />)}
           </div>
+        </section>
 
-          {/* Column 2: Typography, Grid, and Button Specs (Span 2) */}
-          <div className="md:col-span-2 space-y-6">
-            
-            <GlowPanel>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-[var(--border-subtle)] pb-2 flex items-center gap-2">
-                <Shield className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
-                Command Typography Spec
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <span className="text-[10px] text-[var(--text-secondary)] uppercase block mb-1">Header font (Space Grotesk)</span>
-                  <h2 className="text-xl font-bold text-white uppercase tracking-wide">
-                    GEOMETRIC DISPLAY SUBHEADING
-                  </h2>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[var(--text-secondary)] uppercase block mb-1">Body UI font (Inter)</span>
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                    This is paragraph body text styled in Inter. It is clean and readable, keeping contrast fully compliant with WCAG AA standards.
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[var(--text-secondary)] uppercase block mb-1">Telemetry readouts font (JetBrains Mono)</span>
-                  <div className="bg-[var(--bg-base)] p-3 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[11px] font-mono text-emerald-400 leading-normal">
-                    <p>SYSTEM_VERDICT: DDoS_ATTACK_DETECTED</p>
-                    <p>CONFIDENCE:     99.9824% (TIER_1_SCREENER)</p>
-                    <p>TIMESTAMP:      2026-06-29 05:54:12 UTC</p>
-                    <p>FLOW_BANDWIDTH: 148,252.12 pkts/sec</p>
-                  </div>
-                </div>
-              </div>
-            </GlowPanel>
-
-            <GlowPanel>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-4 border-b border-[var(--border-subtle)] pb-2 flex items-center gap-2">
-                <Info className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
-                HUD Action Buttons
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <span className="text-[9px] text-[var(--text-secondary)] uppercase block text-center">Primary Action</span>
-                  <GlowButton variant="primary" className="w-full">
-                    Accept Threat
-                  </GlowButton>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-[9px] text-[var(--text-secondary)] uppercase block text-center">Secondary Outline</span>
-                  <GlowButton variant="secondary" className="w-full">
-                    Acknowledge
-                  </GlowButton>
-                </div>
-                <div className="space-y-2">
-                  <span className="text-[9px] text-[var(--text-secondary)] uppercase block text-center">Ghost Option</span>
-                  <GlowButton variant="ghost" className="w-full">
-                    Dismiss
-                  </GlowButton>
-                </div>
-              </div>
-            </GlowPanel>
-
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-[var(--sr-text-primary)]">
+            Status palette <span className="font-normal text-[var(--sr-text-muted)]">— always paired with a dot + label, never color alone</span>
+          </h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            {STATUS_SWATCHES.map((s) => <Swatch key={s.varName} {...s} />)}
           </div>
+        </section>
 
-        </div>
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-[var(--sr-text-primary)]">
+            Categorical palette <span className="font-normal text-[var(--sr-text-muted)]">— fixed order, reused everywhere cascade tiers or models appear</span>
+          </h2>
+          <div className="grid grid-cols-3 gap-4 sm:max-w-md">
+            {CATEGORICAL_SWATCHES.map((s) => <Swatch key={s.varName} {...s} />)}
+          </div>
+        </section>
 
-        {/* Footer Panel */}
-        <div className="text-center py-4 border-t border-[var(--border-subtle)]">
-          <span className="text-[9px] text-[var(--text-muted)] font-mono uppercase tracking-wider">
-            ThreatSim AI SOC Console Platform • Version 0.1.0 • Protected Session
-          </span>
+        {/* Typography */}
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <GlowPanel>
+            <h3 className="mb-4 border-b border-[var(--sr-border-hairline)] pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--sr-text-muted)]">
+              Typography
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <span className="mb-1 block text-[11px] text-[var(--sr-text-muted)]">Heading — Inter Semibold</span>
+                <h2 className="text-2xl font-semibold tracking-tight text-[var(--sr-text-primary)]">
+                  Threat Posture Index
+                </h2>
+              </div>
+              <div>
+                <span className="mb-1 block text-[11px] text-[var(--sr-text-muted)]">Body — Inter Regular</span>
+                <p className="text-sm leading-relaxed text-[var(--sr-text-secondary)]">
+                  Body copy stays in the same sans family as headings, just lighter weight and a secondary ink
+                  color — no separate display face, no monospace-for-everything.
+                </p>
+              </div>
+              <div>
+                <span className="mb-1 block text-[11px] text-[var(--sr-text-muted)]">Tabular numerals — reserved for aligned data only</span>
+                <div className="rounded-[var(--sr-radius-sm)] border border-[var(--sr-border-hairline)] bg-[var(--sr-bg-surface-raised)] p-3 text-sm text-[var(--sr-text-primary)]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  <p>Verdict&nbsp;&nbsp;&nbsp;&nbsp;DDoS Attack</p>
+                  <p>Confidence&nbsp;99.98%</p>
+                  <p>Rate&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;148,252 pkts/sec</p>
+                </div>
+              </div>
+            </div>
+          </GlowPanel>
+
+          <GlowPanel>
+            <h3 className="mb-4 border-b border-[var(--sr-border-hairline)] pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--sr-text-muted)]">
+              Buttons
+            </h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <span className="block text-center text-[11px] text-[var(--sr-text-muted)]">Primary</span>
+                <GlowButton variant="primary" className="w-full" onClick={handleSimulate} disabled={loading}>
+                  {loading ? (<><RefreshCw className="h-3.5 w-3.5 animate-spin" />Working</>) : 'Start simulation'}
+                </GlowButton>
+              </div>
+              <div className="space-y-2">
+                <span className="block text-center text-[11px] text-[var(--sr-text-muted)]">Secondary</span>
+                <GlowButton variant="secondary" className="w-full">Acknowledge</GlowButton>
+              </div>
+              <div className="space-y-2">
+                <span className="block text-center text-[11px] text-[var(--sr-text-muted)]">Ghost</span>
+                <GlowButton variant="ghost" className="w-full">Dismiss</GlowButton>
+              </div>
+            </div>
+
+            <h3 className="mb-4 mt-6 border-b border-[var(--sr-border-hairline)] pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--sr-text-muted)]">
+              Severity badges
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge status="Critical" />
+              <StatusBadge status="High" />
+              <StatusBadge status="Medium" />
+              <StatusBadge status="Low" />
+              <StatusBadge status="Info" />
+              <StatusBadge status="Rule-Based" />
+              <StatusBadge status="Gemini" />
+            </div>
+          </GlowPanel>
+        </section>
+
+        {/* Card example */}
+        <GlowPanel className="max-w-sm">
+          <span className="text-[11px] font-medium text-[var(--sr-text-muted)]">Packets processed</span>
+          <p className="mt-1 text-3xl font-semibold text-[var(--sr-text-primary)]" style={{ fontVariantNumeric: 'tabular-nums' }}>12,480</p>
+          <p className="mt-1 text-xs text-[var(--sr-text-secondary)]">Total streams screened this session</p>
+        </GlowPanel>
+
+        <div className="border-t border-[var(--sr-border-hairline)] pt-6 text-center">
+          <span className="text-xs text-[var(--sr-text-muted)]">Cascadyx · Design System v2 · Signal Room</span>
         </div>
 
       </div>

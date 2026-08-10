@@ -1,3 +1,24 @@
+/**
+ * ===============================================================================
+ * STUDENT EXPLANATORY GUIDE: api.ts
+ * ===============================================================================
+ * WHAT THIS FILE IS FOR:
+ * ----------------------
+ * This file configures the Centralized Axios HTTP Client for sending requests from
+ * the React frontend to the FastAPI backend.
+ * 
+ * KEY FUNCTIONALITIES:
+ * --------------------
+ * 1. `axios.create()`: Establishes base API instance.
+ * 2. Request Interceptor: Automatically attaches the logged-in user's JWT bearer token (`Authorization: Bearer <token>`) to every outgoing HTTP request.
+ * 3. Response Interceptor: Catches HTTP `401 Unauthorized` responses and automatically boots expired sessions to the `/login` page.
+ * 
+ * LIBRARIES & TOOLS USED:
+ * -----------------------
+ * - `axios`: Promise-based HTTP client for browser requests.
+ * ===============================================================================
+ */
+
 import axios from 'axios';
 
 const api = axios.create({

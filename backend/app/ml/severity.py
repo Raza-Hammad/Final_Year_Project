@@ -1,4 +1,24 @@
-"""Unified severity scoring layer for threat alerts."""
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: severity.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file calculates the Security Threat Severity Rating (Critical, High, Medium, Low, Info)
+for any network packet flow analyzed by our ML models.
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `BASE_SEVERITY_MAP`: Maps 15 network traffic categories to baseline threat levels
+   (e.g., BENIGN -> Info, PortScan -> Medium, FTP/SSH Patator -> High, DDoS/Heartbleed/Bot -> Critical).
+2. `compute_severity()`: Dynamically calculates final severity ratings. If ML confidence is below 70%,
+   it safely downgrades the severity rating by one tier to reflect classification uncertainty.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- Standard Python dictionaries and conditional logic.
+===============================================================================
+"""
 
 BASE_SEVERITY_MAP = {
     "BENIGN": "Info",
@@ -6,15 +26,15 @@ BASE_SEVERITY_MAP = {
     "DDoS": "Critical",
     "DoS GoldenEye": "Critical",
     "DoS Hulk": "Critical",
-    "DoS Slowhttptest": "High",
-    "DoS slowloris": "High",
+    "DoS Slowhttptest": "Critical",
+    "DoS slowloris": "Critical",
     "FTP-Patator": "High",
     "Heartbleed": "Critical",
     "Infiltration": "Critical",
     "PortScan": "Medium",
     "SSH-Patator": "High",
     "Web Attack - Brute Force": "High",
-    "Web Attack - Sql Injection": "Critical",
+    "Web Attack - Sql Injection": "High",
     "Web Attack - XSS": "High"
 }
 
@@ -58,7 +78,7 @@ if __name__ == "__main__":
         ("DDoS", 0.98),
         ("DDoS", 0.65), # Downgrade to High
         ("DoS Slowhttptest", 0.85),
-        ("DoS Slowhttptest", 0.55), # Downgrade to Medium
+        ("DoS Slowhttptest", 0.55), # Downgrade to High
         ("PortScan", 0.88),
         ("PortScan", 0.50), # Downgrade to Low
         ("Infiltration", 0.90),

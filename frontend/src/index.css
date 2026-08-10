@@ -2,19 +2,11 @@
 
 @import "./styles/tokens.css";
 
-/* Global Base Overrides mapped to Command Center Tokens */
+/* Global base — "Signal Room" design system: one sans family everywhere */
 body {
-  background-color: var(--bg-base) !important;
-  color: var(--text-primary);
-  font-family: var(--font-body);
-}
-
-h1, h2, h3, h4, h5, h6, .font-display {
-  font-family: var(--font-display) !important;
-}
-
-code, pre, .font-mono {
-  font-family: var(--font-mono) !important;
+  background-color: var(--sr-bg-page);
+  color: var(--sr-text-primary);
+  font-family: var(--sr-font-sans);
 }
 
 /* Animations and Utilities */

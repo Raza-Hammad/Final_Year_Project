@@ -1,3 +1,34 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: simulator.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file is the Real-Time Threat Simulation Engine.
+It replays real network attack scenarios (DoS, DDoS, PortScan, Brute Force, Web Attacks, Botnet, Heartbleed)
+from the CICIDS2017 dataset in an isolated environment, feeds traffic vectors into our 3-Tier ML Cascade Detector,
+saves malicious alerts into the SQLite database, and streams live telemetry to the UI over WebSockets.
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `SCENARIOS`: Registry mapping scenario presets (e.g. `dos`, `brute_force`, `mixed_attack`) to dataset labels.
+2. `SimulationEngine.initialize()`: Memory-maps test dataset splits (`.npz`) and indexes sample rows by attack category.
+3. `SimulationEngine.start()`: Spawns an asynchronous background task replaying flows at a user-defined packet rate (e.g., 20 pkts/sec).
+4. `SimulationEngine._runner()`: The background worker loop:
+   - Selects packet samples matching the scenario.
+   - Passes unscaled flow features into `CascadeDetector.detect()`.
+   - Generates realistic IP/Port metadata using `get_raw_flow_metadata()`.
+   - Saves non-benign predictions as `Alert` rows in the SQLite database.
+   - Broadcasts live packet data to UI clients over WebSockets via `broadcast_detection()`.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `asyncio`: Manages background non-blocking execution tasks (`asyncio.create_task`, `asyncio.sleep`).
+- `numpy`: Performs fast dataset indexing and array memory mapping (`mmap_mode="r"`).
+- `sqlmodel.Session`: Saves flagged security alerts to the database.
+===============================================================================
+"""
+
 import asyncio
 import logging
 import numpy as np
@@ -10,8 +41,19 @@ from app.config import settings
 from app.db import engine, Alert
 from app.ml.cascade import get_detector
 from app.ml.metadata_helper import get_raw_flow_metadata
+from app.ws_manager import broadcast_detection
 
 logger = logging.getLogger(__name__)
+
+# Legacy scenario IDs kept for backward compatibility with older frontend builds/API
+# callers, mapped to their current canonical scenario ID. Single source of truth --
+# also consumed by main.py's /api/simulate/start request validation.
+LEGACY_SCENARIO_ALIASES = {"ddos_storm": "ddos"}
+
+# Sane ceiling on simulated packets/sec. The UI only ever offers up to 30, but this
+# guards the endpoint against a caller passing an extreme value that would make
+# `interval = 1.0 / rate` collapse toward a busy-loop.
+MAX_SIMULATION_RATE = 500
 
 # Global scenario registry mapped to dataset labels
 SCENARIOS = {
@@ -167,13 +209,14 @@ class SimulationEngine:
             
         if self.is_running:
             raise ValueError("Simulation is already running. Stop it first.")
-            
-        # Legacy scenario mapping
-        if scenario == "ddos_storm":
-            scenario = "ddos"
-            
+
+        scenario = LEGACY_SCENARIO_ALIASES.get(scenario, scenario)
+
         if scenario not in SCENARIOS:
             raise ValueError(f"Unknown scenario: {scenario}")
+
+        if rate > MAX_SIMULATION_RATE:
+            raise ValueError(f"Simulation rate cannot exceed {MAX_SIMULATION_RATE} packets/sec.")
             
         source_indices = self.scenarios.get(scenario, np.array([]))
         if len(source_indices) == 0:
@@ -224,10 +267,6 @@ class SimulationEngine:
         """Background loop streaming dataset rows through ML cascade and WebSocket."""
         try:
             detector = get_detector()
-            
-            # Import dynamically to avoid circular imports during module load
-            from app.main import broadcast_detection
-            
             interval = 1.0 / self.rate
             
             # Local copies for iteration of low-sample count scenarios

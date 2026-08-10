@@ -1,3 +1,28 @@
+/**
+ * ===============================================================================
+ * STUDENT EXPLANATORY GUIDE: AuthContext.tsx
+ * ===============================================================================
+ * WHAT THIS FILE IS FOR:
+ * ----------------------
+ * This file implements the Global Authentication React Context Provider.
+ * It manages user authentication state (logged in vs logged out), decodes JWT tokens,
+ * persists session tokens in browser `localStorage`, and exposes the `useAuth()` hook.
+ * 
+ * KEY FUNCTIONALITIES:
+ * --------------------
+ * 1. `decodeJWT()`: Client-side helper function parsing JWT base64 payloads to extract `username` and `role`.
+ * 2. `AuthProvider`: React Context Wrapper managing `token` and `user` state across all components.
+ * 3. `login()`: Persists JWT token to browser `localStorage` and configures default HTTP headers.
+ * 4. `logout()`: Revokes JWT server-side, clears local storage, and resets auth state.
+ * 5. `useAuth()`: Custom React hook allowing any component to inspect auth status or invoke login/logout.
+ * 
+ * LIBRARIES & TOOLS USED:
+ * -----------------------
+ * - `react`: Context API (`createContext`, `useContext`), state (`useState`), and lifecycle (`useEffect`).
+ * - `axios`: Sends logout POST requests to `/api/auth/logout`.
+ * ===============================================================================
+ */
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -10,7 +35,7 @@ interface AuthContextType {
   token: string | null;
   user: UserProfile | null;
   login: (token: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -68,7 +93,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Best-effort server-side revocation -- still clear local session even if this
+    // fails (e.g. backend unreachable), since the user's intent to log out locally
+    // shouldn't be blocked by a network call.
+    try {
+      await axios.post('/api/auth/logout');
+    } catch (error) {
+      console.warn('Server-side logout revocation failed:', error);
+    }
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');

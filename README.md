@@ -1,5 +1,7 @@
 # Cybersecurity Threat Simulator Powered by AI
 
+Product name: **Cascadyx**.
+
 This project is a Cybersecurity Threat Simulator and Detection system built as a Final Year Project. It simulates network-level threat vectors by replaying traffic in an isolated environment, detects threats using a machine learning cascade, and visualizes outcomes in a real-time React-based dashboard.
 
 ## Project Structure
@@ -59,7 +61,8 @@ Cybersecurity_Threat_Simulator_Powered_by_AI/
 4. **Prepare environment variables**:
    ```bash
    cp .env.example .env
-   # Open .env and add your GEMINI_API_KEY (optional for basic health check)
+   # Open .env and add your GEMINI_API_KEYS (comma-separated, optional — the AI Assistant
+   # falls back to rule-based answers if no keys are configured)
    ```
 
 5. **Start the FastAPI backend server**:

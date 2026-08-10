@@ -11,9 +11,8 @@ This file outlines build, run, and quality commands, along with coding styles fo
 - **Install Dependencies**: `pip install -r backend/requirements.txt`
 - **Run Dev Server**: `uvicorn backend.app.main:app --reload --port 8000`
 - **Check Health**: `curl http://127.0.0.1:8000/api/health`
-- **Run API Integration & Auth Test**: `python -m app.ml.generate_test_alerts` (from `backend/` directory)
-- **Run WebSocket Telemetry Test**: `python -m app.ml.test_websocket` (from `backend/` directory)
-- **Run Simulator Telemetry Test**: `python -m app.ml.test_simulator` (from `backend/` directory)
+- **Run Test Suite**: `pytest` (from `backend/` directory) — runs against an isolated temp DB + the real trained cascade models; does not require a separately running dev server.
+- **Seed Demo Alert Data**: `python -m app.ml.generate_test_alerts` (from `backend/` directory, requires the dev server already running) — populates the live dev database with sample alerts for manual UI walkthroughs.
 
 ### Frontend (React + Vite)
 - **Install Dependencies**: `npm install` (inside `/frontend`)

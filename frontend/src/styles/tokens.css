@@ -1,47 +1,130 @@
 :root {
-  /* Background Colors */
-  --bg-base: #0A0E1A;          /* Deep instrument console navy-black */
-  --bg-panel: #111827;         /* Sleek charcoal panel */
-  --bg-panel-raised: #1A2335;  /* Raised panel for focus elements */
+  /* ============================================================
+     "Signal Room" design system — light, restrained, one accent.
+     ============================================================ */
 
-  /* Primary Accent & Glow (Amber HUD Theme) */
-  --accent-amber: #F5A623;
-  --accent-amber-glow: rgba(245, 166, 35, 0.15);
-  --accent-amber-hover: #F8B43F;
-  --accent-amber-bright: rgba(245, 166, 35, 0.8);
+  /* Surfaces */
+  --sr-bg-page: #FAFAFA;
+  --sr-bg-surface: #FFFFFF;
+  --sr-bg-surface-raised: #F5F6F7;
 
-  /* Status and Severity Colors */
-  --color-calm: #2DD4BF;      /* Secure Cyan */
-  --color-critical: #EF4444;  /* Crimson Critical Alert */
-  --color-high: #F97316;      /* Orange High Alert */
-  --color-medium: #F5A623;    /* Amber Medium Alert */
-  --color-low: #64748B;       /* Muted Slate Low/Info */
-  --color-info: #64748B;      /* Muted Slate Info */
+  /* Borders */
+  --sr-border-hairline: rgba(11, 11, 11, 0.08);
+  --sr-border-hover: rgba(11, 11, 11, 0.16);
 
-  /* Text Contrast Tokens (WCAG AA compliant) */
-  --text-primary: #F3F4F6;    /* Off-white display text */
-  --text-secondary: #9CA3AF;  /* Cool secondary gray */
-  --text-muted: #4B5563;      /* Darker placeholder / disabled text */
+  /* Text */
+  --sr-text-primary: #0B0B0B;
+  --sr-text-secondary: #5B6472;
+  --sr-text-muted: #8A8F98;
 
-  /* Borders & Highlights */
-  --border-subtle: rgba(245, 166, 35, 0.15);
-  --border-glow-hover: rgba(245, 166, 35, 0.5);
+  /* Accent — deep indigo + warm copper duotone. Deliberately not "SaaS blue":
+     the brand identity (buttons, links, active nav, logomark, focus rings) lives
+     here. Tier/model categorical colors (--sr-cat-*) are a separate, validated
+     system below and are untouched by this pair. */
+  --sr-accent: #4C3F91;
+  --sr-accent-hover: #3A2F73;
+  --sr-accent-soft: rgba(76, 63, 145, 0.08);
 
-  /* Borders Radius Scale */
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* Secondary accent — warm copper, the other half of the duotone. Used for
+     gradient depth/illustrations and anywhere a second brand hue is needed. */
+  --sr-accent-2: #C97A3F;
+  --sr-accent-2-soft: rgba(201, 122, 63, 0.08);
 
-  /* Spacing Scale (Standard HUD spacing grids) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
+  /* Glass surface — frosted panel variant used over the network background */
+  --sr-glass-bg: rgba(255, 255, 255, 0.72);
+  --sr-glass-border: rgba(255, 255, 255, 0.6);
 
-  /* Typography Fonts */
-  --font-display: 'Space Grotesk', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Nav identity — one hue per sidebar panel, distinct from severity/tier palettes
+     so they never collide in meaning. Live/Insights reuse the primary accents;
+     these three cover Simulator/History/AI Assistant. */
+  --sr-nav-simulator: #1E9E7E;
+  --sr-nav-simulator-soft: rgba(30, 158, 126, 0.1);
+  --sr-nav-history: #B8862E;
+  --sr-nav-history-soft: rgba(184, 134, 46, 0.1);
+  --sr-nav-ai: #C94F87;
+  --sr-nav-ai-soft: rgba(201, 79, 135, 0.1);
+
+  /* Status palette — fixed, always paired with an icon/dot + label */
+  --sr-sev-critical: #D03B3B;
+  --sr-sev-high: #EC835A;
+  --sr-sev-medium: #FAB219;
+  --sr-sev-low: #8A8F98;
+  --sr-sev-info: #0CA30C;
+
+  /* Categorical — fixed order, reused everywhere tiers/models appear */
+  --sr-cat-1: #2A78D6; /* Tier 1 / Model A */
+  --sr-cat-2: #EB6834; /* Tier 2 / Model B */
+  --sr-cat-3: #1BAF7A; /* Tier 3 / Model C */
+
+  /* Sequential ramp — single hue, magnitude (confusion-matrix heatmap) */
+  --sr-seq-100: #CDE2FB;
+  --sr-seq-300: #6DA7EC;
+  --sr-seq-500: #256ABF;
+  --sr-seq-700: #0D366B;
+
+  /* Elevation */
+  --sr-shadow-sm: 0 1px 2px rgba(16, 24, 32, 0.04);
+  --sr-shadow-md: 0 4px 12px rgba(16, 24, 32, 0.06);
+
+  /* Colored ambient glow — used sparingly on hero cards/primary CTAs (hover or
+     "this matters" moments) instead of the neutral shadow above. This is what
+     keeps the light theme from reading as flat/generic: a soft light source in
+     the brand hue rather than plain gray elevation. */
+  --sr-shadow-glow: 0 20px 50px -16px rgba(76, 63, 145, 0.35), 0 4px 14px -4px rgba(76, 63, 145, 0.18);
+  --sr-shadow-glow-2: 0 20px 50px -16px rgba(201, 122, 63, 0.32), 0 4px 14px -4px rgba(201, 122, 63, 0.16);
+
+  /* Brand gradient — reused for gradient text, aurora washes, and any surface
+     that wants the duotone as a single unit rather than two separate colors. */
+  --sr-gradient-brand: linear-gradient(135deg, var(--sr-accent) 0%, var(--sr-accent-2) 100%);
+
+  /* Radius */
+  --sr-radius-sm: 8px;
+  --sr-radius-md: 14px;
+
+  /* Typography — Inter for all body/UI text. Space Grotesk is used sparingly and
+     deliberately: hero numbers, the Intro title, and panel headlines only. It's
+     what gives the product a typographic signature instead of reading as a
+     default system-font template. */
+  --sr-font-sans: 'Inter', "Segoe UI", system-ui, sans-serif;
+  --sr-font-display: 'Space Grotesk', 'Inter', "Segoe UI", system-ui, sans-serif;
 }
+
+[data-theme='dark'] {
+  /* Dark SOC Command Center Theme */
+  --sr-bg-page: #0B0E14;
+  --sr-bg-surface: #121824;
+  --sr-bg-surface-raised: #1A2332;
+
+  --sr-border-hairline: rgba(255, 255, 255, 0.08);
+  --sr-border-hover: rgba(255, 255, 255, 0.16);
+
+  --sr-text-primary: #F0F4F8;
+  --sr-text-secondary: #94A3B8;
+  --sr-text-muted: #64748B;
+
+  --sr-accent: #8578D8;
+  --sr-accent-hover: #A69AE8;
+  --sr-accent-soft: rgba(133, 120, 216, 0.18);
+
+  --sr-accent-2: #E0955A;
+  --sr-accent-2-soft: rgba(224, 149, 90, 0.18);
+
+  --sr-glass-bg: rgba(18, 24, 36, 0.85);
+  --sr-glass-border: rgba(255, 255, 255, 0.1);
+
+  --sr-nav-simulator: #34D1A8;
+  --sr-nav-simulator-soft: rgba(52, 209, 168, 0.15);
+  --sr-nav-history: #D9A544;
+  --sr-nav-history-soft: rgba(217, 165, 68, 0.15);
+  --sr-nav-ai: #E879A8;
+  --sr-nav-ai-soft: rgba(232, 121, 168, 0.15);
+
+  --sr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sr-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+
+  /* Glow needs to be brighter/more saturated against a dark surface to read at
+     all -- a subtle light-mode glow would just disappear here. */
+  --sr-shadow-glow: 0 20px 60px -14px rgba(133, 120, 216, 0.55), 0 4px 18px -2px rgba(133, 120, 216, 0.3);
+  --sr-shadow-glow-2: 0 20px 60px -14px rgba(224, 149, 90, 0.5), 0 4px 18px -2px rgba(224, 149, 90, 0.28);
+}
+

@@ -1,0 +1,296 @@
+{
+  "section_4_1_tier_distribution_and_4_3_cascade_accuracy": {
+    "sample_size": 200000,
+    "sample_method": "stratified (sklearn train_test_split, stratify=y_test, random_state=42) over the full cached test split (data/cache/processed_data.npz X_test/y_test)",
+    "tier_counts": {
+      "1": 199378,
+      "2": 86,
+      "3": 536
+    },
+    "tier_percentages": {
+      "1": 99.68900000000001,
+      "2": 0.043,
+      "3": 0.268
+    },
+    "tier_by_class": {
+      "BENIGN": {
+        "1": 160243,
+        "2": 62,
+        "3": 333
+      },
+      "Bot": {
+        "1": 125,
+        "2": 6,
+        "3": 7
+      },
+      "DDoS": {
+        "1": 9047,
+        "2": 8,
+        "3": 0
+      },
+      "DoS GoldenEye": {
+        "1": 719,
+        "2": 2,
+        "3": 7
+      },
+      "DoS Hulk": {
+        "1": 16215,
+        "2": 6,
+        "3": 55
+      },
+      "DoS Slowhttptest": {
+        "1": 385,
+        "2": 0,
+        "3": 4
+      },
+      "DoS slowloris": {
+        "1": 406,
+        "2": 0,
+        "3": 4
+      },
+      "FTP-Patator": {
+        "1": 561,
+        "2": 0,
+        "3": 0
+      },
+      "Heartbleed": {
+        "1": 1,
+        "2": 0,
+        "3": 0
+      },
+      "Infiltration": {
+        "1": 3,
+        "2": 0,
+        "3": 0
+      },
+      "PortScan": {
+        "1": 11228,
+        "2": 2,
+        "3": 1
+      },
+      "SSH-Patator": {
+        "1": 415,
+        "2": 0,
+        "3": 2
+      },
+      "Web Attack - Brute Force": {
+        "1": 26,
+        "2": 0,
+        "3": 80
+      },
+      "Web Attack - Sql Injection": {
+        "1": 1,
+        "2": 0,
+        "3": 0
+      },
+      "Web Attack - XSS": {
+        "1": 3,
+        "2": 0,
+        "3": 43
+      }
+    },
+    "mean_confidence_by_tier": {
+      "1": 0.9992936328438513,
+      "2": 0.9103338208942309,
+      "3": 0.5748178122374159
+    },
+    "cascade_accuracy_overall": 0.997115,
+    "cascade_macro_precision": 0.8024258897065802,
+    "cascade_macro_recall": 0.8545960184779737,
+    "cascade_macro_f1": 0.8103914656460776,
+    "cascade_accuracy_by_tier": {
+      "1": 0.9991373170560442,
+      "2": 0.7558139534883721,
+      "3": 0.2835820895522388
+    },
+    "pass_wall_clock_seconds": 4509.4689292907715
+  },
+  "section_4_2_cost_saving": {
+    "mean_cascade_latency_ms_per_flow": 22.521605683946692,
+    "measured_over_n_flows_cascade": 200000,
+    "mean_all_three_models_latency_ms_per_flow": 27.542270680255022,
+    "measured_over_n_flows_brute_force": 10000,
+    "percentage_saving": 18.2289436284846,
+    "method": "Both measured with time.perf_counter() wall-clock timing per single-flow call on this machine; brute-force path replicates detect()'s own preprocessing (scaler.transform + DataFrame construction) then calls all three models' predict_proba unconditionally with no early exit."
+  },
+  "section_4_5_throughput_and_machine_spec": {
+    "throughput_flows_per_second_sustained": 44.351120527945426,
+    "measured_over_n_flows": 200000,
+    "measured_over_seconds": 4509.4689292907715,
+    "machine_cpu": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+    "machine_cpu_logical_cores": 16,
+    "machine_cpu_physical_cores": 10,
+    "machine_cpu_max_freq_mhz": 2300.0,
+    "machine_ram_total_bytes": 16831713280,
+    "machine_ram_total_gb": 15.67575454711914,
+    "machine_os": "Windows-11-10.0.26200-SP0",
+    "python_version": "3.13.2"
+  },
+  "section_4_4_per_scenario": {
+    "dos": {
+      "display_name": "DoS Attack",
+      "mapped_labels": [
+        "DoS Hulk",
+        "DoS GoldenEye",
+        "DoS slowloris",
+        "DoS Slowhttptest"
+      ],
+      "n_flows_sampled": 5000,
+      "non_benign_prediction_rate": 0.9976,
+      "cascade_accuracy_vs_ground_truth": 0.9968,
+      "mean_confidence": 0.9969501867203955,
+      "most_common_misclassification": {
+        "true_label": "DoS Hulk",
+        "predicted_label": "BENIGN",
+        "count": 8
+      }
+    },
+    "ddos": {
+      "display_name": "DDoS Attack",
+      "mapped_labels": [
+        "DDoS"
+      ],
+      "n_flows_sampled": 5000,
+      "non_benign_prediction_rate": 0.9998,
+      "cascade_accuracy_vs_ground_truth": 0.9998,
+      "mean_confidence": 0.9999053050624074,
+      "most_common_misclassification": {
+        "true_label": "DDoS",
+        "predicted_label": "BENIGN",
+        "count": 1
+      }
+    },
+    "brute_force": {
+      "display_name": "Brute Force",
+      "mapped_labels": [
+        "FTP-Patator",
+        "SSH-Patator"
+      ],
+      "n_flows_sampled": 2767,
+      "non_benign_prediction_rate": 0.9996385977593061,
+      "cascade_accuracy_vs_ground_truth": 0.9992771955186122,
+      "mean_confidence": 0.9994149531638703,
+      "most_common_misclassification": {
+        "true_label": "FTP-Patator",
+        "predicted_label": "Web Attack - XSS",
+        "count": 1
+      }
+    },
+    "web_attacks": {
+      "display_name": "Web Attacks",
+      "mapped_labels": [
+        "Web Attack - Brute Force",
+        "Web Attack - Sql Injection",
+        "Web Attack - XSS"
+      ],
+      "n_flows_sampled": 435,
+      "non_benign_prediction_rate": 0.9839080459770115,
+      "cascade_accuracy_vs_ground_truth": 0.6114942528735632,
+      "mean_confidence": 0.6322890518961645,
+      "most_common_misclassification": {
+        "true_label": "Web Attack - Brute Force",
+        "predicted_label": "Web Attack - XSS",
+        "count": 126
+      }
+    },
+    "port_scan": {
+      "display_name": "Port Scan",
+      "mapped_labels": [
+        "PortScan"
+      ],
+      "n_flows_sampled": 5000,
+      "non_benign_prediction_rate": 0.9998,
+      "cascade_accuracy_vs_ground_truth": 0.9998,
+      "mean_confidence": 0.9937528172469381,
+      "most_common_misclassification": {
+        "true_label": "PortScan",
+        "predicted_label": "BENIGN",
+        "count": 1
+      }
+    },
+    "bot": {
+      "display_name": "Botnet Activity",
+      "mapped_labels": [
+        "Bot"
+      ],
+      "n_flows_sampled": 391,
+      "non_benign_prediction_rate": 0.9462915601023018,
+      "cascade_accuracy_vs_ground_truth": 0.9462915601023018,
+      "mean_confidence": 0.9638705691506595,
+      "most_common_misclassification": {
+        "true_label": "Bot",
+        "predicted_label": "BENIGN",
+        "count": 21
+      }
+    },
+    "infiltration": {
+      "display_name": "Infiltration",
+      "mapped_labels": [
+        "Infiltration"
+      ],
+      "n_flows_sampled": 7,
+      "non_benign_prediction_rate": 0.7142857142857143,
+      "cascade_accuracy_vs_ground_truth": 0.7142857142857143,
+      "mean_confidence": 0.9349055783865055,
+      "most_common_misclassification": {
+        "true_label": "Infiltration",
+        "predicted_label": "BENIGN",
+        "count": 2
+      }
+    },
+    "heartbleed": {
+      "display_name": "Heartbleed",
+      "mapped_labels": [
+        "Heartbleed"
+      ],
+      "n_flows_sampled": 2,
+      "non_benign_prediction_rate": 1.0,
+      "cascade_accuracy_vs_ground_truth": 1.0,
+      "mean_confidence": 0.9998753515490553,
+      "most_common_misclassification": null
+    },
+    "mixed_attack": {
+      "display_name": "Mixed Attack",
+      "mapped_labels": [
+        "Bot",
+        "DDoS",
+        "DoS GoldenEye",
+        "DoS Hulk",
+        "DoS Slowhttptest",
+        "DoS slowloris",
+        "FTP-Patator",
+        "Heartbleed",
+        "Infiltration",
+        "PortScan",
+        "SSH-Patator",
+        "Web Attack - Brute Force",
+        "Web Attack - Sql Injection",
+        "Web Attack - XSS"
+      ],
+      "n_flows_sampled": 5000,
+      "non_benign_prediction_rate": 0.8124,
+      "cascade_accuracy_vs_ground_truth": 0.996,
+      "mean_confidence": 0.9954356906491303,
+      "most_common_misclassification": {
+        "true_label": "Web Attack - Brute Force",
+        "predicted_label": "Web Attack - XSS",
+        "count": 7
+      }
+    },
+    "benign_baseline": {
+      "display_name": "Benign Baseline",
+      "mapped_labels": [
+        "BENIGN"
+      ],
+      "n_flows_sampled": 5000,
+      "non_benign_prediction_rate": 0.004,
+      "cascade_accuracy_vs_ground_truth": 0.996,
+      "mean_confidence": 0.9983434462919547,
+      "most_common_misclassification": {
+        "true_label": "BENIGN",
+        "predicted_label": "Web Attack - XSS",
+        "count": 8
+      }
+    }
+  }
+}

@@ -1,3 +1,34 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: cascade.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file is the core Machine Learning Inference Engine of Cascadyx!
+It implements a 3-Tier Machine Learning Cascade Detector to classify network flows as either
+BENIGN (normal) or a specific attack category (e.g. DoS, DDoS, PortScan, Botnet, Heartbleed).
+It also calculates Explainable AI (XAI) feature attributions so analysts know *why* a packet was flagged.
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `CascadeDetector.__init__()`: Loads pre-trained model binaries (LightGBM, Random Forest, XGBoost),
+   Scikit-Learn StandardScaler, LabelEncoder, and 30 selected top features from disk cache.
+2. `CascadeDetector.detect()`: Executes the 3-Tier Cascade classification logic:
+   - **Tier 1 (LightGBM Screener)**: Fast prediction on 100% of packets. If confidence >= 85%, returns result.
+   - **Tier 2 (Random Forest Validator)**: Escalates to Tier 2 if Tier 1 is uncertain (< 85%).
+   - **Tier 3 (XGBoost Weighted Ensemble)**: Executes a weighted vote across all 3 models (0.2 LGBM + 0.3 RF + 0.5 XGB) if Tier 2 is also uncertain.
+3. `get_top_features()`: Computes local XAI feature importances and compares raw feature values against precomputed benign baseline averages.
+4. `compute_severity()`: Assigns severity ratings (Critical, High, Medium, Low, Info) based on attack type and confidence score.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `joblib`: Loads pre-trained machine learning model files (`.joblib`) into memory.
+- `numpy`: Executes fast matrix operations, mean calculations, and confidence score argmax lookups.
+- `pandas`: Formats scaled feature vectors into DataFrames to prevent feature name mismatch warnings.
+- `LightGBM`, `RandomForestClassifier`, `XGBoost`: The three machine learning model algorithms.
+===============================================================================
+"""
+
 import json
 import logging
 from pathlib import Path
@@ -10,9 +41,11 @@ logger = logging.getLogger(__name__)
 
 class CascadeDetector:
     """Multi-tier inference cascade detector for cybersecurity threats.
-    
+
     Escalation Logic:
-      - Tier 1: LightGBM (Speed-tuned Fast Screener). If max probability >= threshold, return it.
+      - Tier 1: LightGBM (Fast Screener). Selected for highest overall accuracy, not speed
+        (Random Forest is actually the fastest model at inference). If max probability
+        >= threshold, return it.
       - Tier 2: Random Forest (Explainable Validator). If max probability >= threshold, return it.
       - Tier 3: XGBoost & Weighted Vote (Expert Ensemble). Uses a weighted probability vote across all three models.
     """
@@ -265,13 +298,15 @@ if __name__ == "__main__":
     explanation_text = """
     ESCALATION AND WEIGHTED VOTE CASCADE DESIGN:
     
-    1. Tier 1 (LightGBM - Speed-tuned Fast Screener):
-       LightGBM is highly efficient and offers high accuracy. If its prediction confidence
-       (maximum class probability) is >= threshold (default 0.85), the prediction is accepted.
-       This resolves standard, unambiguous flows immediately without hitting slower models.
-       
+    1. Tier 1 (LightGBM - Fast Screener):
+       LightGBM is selected for the highest overall accuracy of the three models, not for
+       speed (Random Forest is actually the fastest model at inference). If its prediction
+       confidence (maximum class probability) is >= threshold (default 0.85), the prediction
+       is accepted. This resolves the clear majority of flows immediately.
+
     2. Tier 2 (Random Forest - Explainable Validator):
-       If Tier 1 fails to meet the confidence threshold, the flow is escalated to Random Forest.
+       If Tier 1 fails to meet the confidence threshold, the flow is escalated to Random Forest,
+       the fastest model at inference and the one driving local XAI feature attributions.
        If Tier 2 confidence is >= threshold, the decision is resolved here.
        
     3. Tier 3 (XGBoost & Weighted Vote - Expert Ensemble):

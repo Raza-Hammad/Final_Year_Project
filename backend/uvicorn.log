@@ -1,0 +1,688 @@
+D:\Final_Year_Project\backend\app\main.py:303: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+2026-08-09 22:09:28,946 - INFO - Loaded 10 Gemini API keys
+INFO:     Started server process [22032]
+INFO:     Waiting for application startup.
+2026-08-09 22:09:29,127 - INFO - Initializing database tables on startup...
+2026-08-09 22:09:29,154 - INFO - Initializing CascadeDetector models (this may take a few seconds)...
+2026-08-09 22:09:29,155 - INFO - Loading ML Preprocessing Scaler and Encoders...
+2026-08-09 22:09:44,806 - INFO - Loading lightgbm model into memory...
+2026-08-09 22:09:45,395 - INFO - Loading random_forest model into memory...
+2026-08-09 22:09:46,498 - INFO - Loading xgboost model into memory...
+2026-08-09 22:09:48,938 - INFO - Loading precomputed benign averages from cache...
+2026-08-09 22:09:48,950 - INFO - CascadeDetector initialized and all assets loaded.
+2026-08-09 22:09:48,950 - INFO - CascadeDetector successfully loaded and cached in application state.
+2026-08-09 22:09:48,950 - INFO - Initializing SimulationEngine...
+2026-08-09 22:09:48,950 - INFO - Memory mapping test dataset splits...
+2026-08-09 22:09:49,421 - INFO - Scenario mapping: Found 454265 samples for 'BENIGN'
+2026-08-09 22:09:49,422 - INFO - Scenario mapping: Found 391 samples for 'Bot'
+2026-08-09 22:09:49,422 - INFO - Scenario mapping: Found 25605 samples for 'DDoS'
+2026-08-09 22:09:49,423 - INFO - Scenario mapping: Found 2059 samples for 'DoS GoldenEye'
+2026-08-09 22:09:49,424 - INFO - Scenario mapping: Found 46025 samples for 'DoS Hulk'
+2026-08-09 22:09:49,424 - INFO - Scenario mapping: Found 1100 samples for 'DoS Slowhttptest'
+2026-08-09 22:09:49,424 - INFO - Scenario mapping: Found 1159 samples for 'DoS slowloris'
+2026-08-09 22:09:49,425 - INFO - Scenario mapping: Found 1587 samples for 'FTP-Patator'
+2026-08-09 22:09:49,425 - INFO - Scenario mapping: Found 2 samples for 'Heartbleed'
+2026-08-09 22:09:49,425 - INFO - Scenario mapping: Found 7 samples for 'Infiltration'
+2026-08-09 22:09:49,426 - INFO - Scenario mapping: Found 31761 samples for 'PortScan'
+2026-08-09 22:09:49,426 - INFO - Scenario mapping: Found 1180 samples for 'SSH-Patator'
+2026-08-09 22:09:49,426 - INFO - Scenario mapping: Found 301 samples for 'Web Attack - Brute Force'
+2026-08-09 22:09:49,426 - INFO - Scenario mapping: Found 4 samples for 'Web Attack - Sql Injection'
+2026-08-09 22:09:49,427 - INFO - Scenario mapping: Found 130 samples for 'Web Attack - XSS'
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'dos' mapped to 50343 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'ddos' mapped to 25605 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'brute_force' mapped to 2767 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'web_attacks' mapped to 435 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'port_scan' mapped to 31761 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'bot' mapped to 391 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'infiltration' mapped to 7 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'heartbleed' mapped to 2 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'mixed_attack' mapped to 111311 threat rows.
+2026-08-09 22:09:49,428 - INFO - Scenario preset 'benign_baseline' mapped to 454265 threat rows.
+2026-08-09 22:09:49,428 - INFO - SimulationEngine successfully initialized.
+2026-08-09 22:09:49,428 - INFO - Starting background WebSocket heartbeat loop...
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54075 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55164 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjI4ODQ5MywianRpIjoiYzU1ZjY0NDFhNzVlNDU3NzMwYzYyNjQ2OGRjMzc0ZGQifQ.bHth6ah9CMeoRmekyFysSVsYt-uBYIPIuwdELUw6Zs4" 403
+INFO:     connection rejected (403 Forbidden)
+INFO:     127.0.0.1:51370 - "GET /api/simulate/scenarios HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51369 - "GET /api/simulate/status HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51371 - "GET /api/data/benign-baseline HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:49669 - "GET /api/simulate/scenarios HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:49670 - "GET /api/simulate/status HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:49671 - "GET /api/data/benign-baseline HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64756 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49876 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjM5ODk2NywianRpIjoiZDYwYTgyZjZhNjA1M2NhZDJkNDM4OWI3YjI4M2RiODYifQ.2a5tkSGVNHAzhl91xmpaUoVeW32BFLTSMo4Di3dACis" [accepted]
+INFO:     connection open
+2026-08-10 02:56:07,778 - INFO - New client connected to WebSocket. Total clients: 1
+2026-08-10 02:56:07,783 - INFO - WebSocket disconnect event registered cleanly.
+2026-08-10 02:56:07,783 - INFO - Client disconnected from WebSocket. Total clients: 0
+INFO:     127.0.0.1:49877 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64005 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjM5ODk2NywianRpIjoiZDYwYTgyZjZhNjA1M2NhZDJkNDM4OWI3YjI4M2RiODYifQ.2a5tkSGVNHAzhl91xmpaUoVeW32BFLTSMo4Di3dACis" [accepted]
+INFO:     connection open
+2026-08-10 02:56:07,797 - INFO - New client connected to WebSocket. Total clients: 1
+INFO:     127.0.0.1:49878 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64006 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64007 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49879 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51644 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65530 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64624 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55667 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56683 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60118 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55565 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62858 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53063 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50804 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60093 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65044 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56817 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62496 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57281 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62500 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57775 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54217 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58034 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60667 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61226 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52276 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51739 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60428 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58421 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54130 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63247 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61791 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65357 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62438 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64775 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51683 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64182 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60207 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64293 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65302 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52111 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57291 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52647 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60243 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54984 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50726 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54145 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63174 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62905 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49379 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64868 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56683 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56958 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58888 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52019 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62993 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50579 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59147 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61958 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58666 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50539 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62147 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54065 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50730 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54644 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53614 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64340 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61160 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58938 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53136 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59419 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56683 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61010 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51462 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59305 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49388 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54277 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54194 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65362 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54626 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63690 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56197 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59102 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63144 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54817 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58107 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52316 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54730 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51196 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61539 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56179 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64767 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56989 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58930 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54438 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64128 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57138 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51985 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56295 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52343 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50876 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60492 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59777 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57330 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55133 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52362 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56684 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63276 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65446 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58348 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61131 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51487 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64493 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55269 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64070 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64877 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51304 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56192 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63569 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53459 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56960 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53480 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64364 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53675 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59679 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64485 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61303 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52557 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59627 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63582 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57986 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60262 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65031 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50352 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49732 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57482 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60099 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63476 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61792 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62751 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57141 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53064 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59492 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64902 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50077 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53275 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60910 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50444 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52876 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60678 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57309 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59949 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55627 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58796 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62739 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49218 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60980 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55669 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58542 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51662 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62700 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59456 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51509 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53221 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64806 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51955 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52191 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52408 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54665 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53706 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51382 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54587 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51132 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51355 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59347 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64805 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61052 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62983 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61890 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49396 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51718 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50103 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54087 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52300 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55385 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54693 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62483 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61248 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50753 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51137 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52279 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50406 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53478 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50494 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51829 - "GET /api/simulate/status HTTP/1.1" 200 OK
+2026-08-10 07:42:27,780 - INFO - WebSocket disconnect event registered cleanly.
+2026-08-10 07:42:27,821 - INFO - Client disconnected from WebSocket. Total clients: 0
+INFO:     127.0.0.1:53118 - "GET /api/health HTTP/1.1" 200 OK
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\uvicorn\protocols\websockets\websockets_sansio_impl.py", line 350, in run_asgi
+    result = await self.app(self.scope, self.receive, self.send)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 80, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 2692, in app
+    await route.handle(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\routing.py", line 350, in handle
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 182, in app
+    await wrap_app_handling_exceptions(app, session)(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 179, in app
+    await func(session)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 788, in app
+    await dependant.call(**solved_result.values)
+  File "D:\Final_Year_Project\backend\app\main.py", line 1241, in websocket_live_endpoint
+    await manager.connect(websocket)
+  File "D:\Final_Year_Project\backend\app\ws_manager.py", line 13, in connect
+    await websocket.accept()
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\websockets.py", line 110, in accept
+    await self.send({"type": "websocket.accept", "subprotocol": subprotocol, "headers": headers})
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\websockets.py", line 76, in send
+    await self._send(message)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 39, in sender
+    await send(message)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\uvicorn\protocols\websockets\websockets_sansio_impl.py", line 455, in send
+    raise RuntimeError(
+        f"Expected ASGI message 'websocket.send' or 'websocket.close', but got '{message['type']}'."
+    )
+RuntimeError: Expected ASGI message 'websocket.send' or 'websocket.close', but got 'websocket.accept'.
+INFO:     127.0.0.1:65446 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjM5ODk2NywianRpIjoiZDYwYTgyZjZhNjA1M2NhZDJkNDM4OWI3YjI4M2RiODYifQ.2a5tkSGVNHAzhl91xmpaUoVeW32BFLTSMo4Di3dACis" [accepted]
+INFO:     connection open
+2026-08-10 16:02:30,231 - INFO - New client connected to WebSocket. Total clients: 1
+INFO:     127.0.0.1:56664 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56665 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65447 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56666 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65448 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65449 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65236 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62048 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60774 - "POST /api/auth/logout HTTP/1.1" 200 OK
+2026-08-10 16:02:32,434 - INFO - WebSocket disconnect event registered cleanly.
+2026-08-10 16:02:32,434 - INFO - Client disconnected from WebSocket. Total clients: 0
+INFO:     127.0.0.1:54696 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64856 - "POST /api/auth/login HTTP/1.1" 200 OK
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\uvicorn\protocols\websockets\websockets_sansio_impl.py", line 350, in run_asgi
+    result = await self.app(self.scope, self.receive, self.send)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 80, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 2692, in app
+    await route.handle(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\routing.py", line 350, in handle
+    await self.app(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 182, in app
+    await wrap_app_handling_exceptions(app, session)(scope, receive, send)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 179, in app
+    await func(session)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\fastapi\routing.py", line 788, in app
+    await dependant.call(**solved_result.values)
+  File "D:\Final_Year_Project\backend\app\main.py", line 1241, in websocket_live_endpoint
+    )
+  File "D:\Final_Year_Project\backend\app\ws_manager.py", line 13, in connect
+    1. `ConnectionManager.connect()`: Accepts new WebSocket connection handshakes from dashboard users.
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\websockets.py", line 110, in accept
+    await self.send({"type": "websocket.accept", "subprotocol": subprotocol, "headers": headers})
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\websockets.py", line 76, in send
+    await self._send(message)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 39, in sender
+    await send(message)
+  File "D:\Final_Year_Project\backend\venv\Lib\site-packages\uvicorn\protocols\websockets\websockets_sansio_impl.py", line 455, in send
+    raise RuntimeError(
+        f"Expected ASGI message 'websocket.send' or 'websocket.close', but got '{message['type']}'."
+    )
+RuntimeError: Expected ASGI message 'websocket.send' or 'websocket.close', but got 'websocket.accept'.
+INFO:     127.0.0.1:58616 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjQ2NDA4MiwianRpIjoiYzYzNTRmOTJmZWM3OGI0YzQ3OGE2M2FiYzNhYjdjZGQifQ.sG6HhnG-X6o55pJvewW0Clz1CV_D1Hs3TaCIEbwJlKk" [accepted]
+INFO:     connection open
+2026-08-10 21:01:22,544 - INFO - New client connected to WebSocket. Total clients: 1
+INFO:     127.0.0.1:59605 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59604 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58617 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58618 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59606 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50580 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54939 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62965 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63890 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59315 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64963 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54130 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57053 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65477 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63914 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56629 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62611 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54791 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63158 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50315 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55400 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60861 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63916 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59325 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51735 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56435 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61594 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58254 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50106 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50744 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53279 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52754 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61973 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63735 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64425 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58124 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61692 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58501 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53685 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51858 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60478 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52424 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59711 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51012 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63226 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58539 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58284 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50524 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49814 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51474 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50466 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49311 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56725 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58728 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63757 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61689 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54091 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65161 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58278 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54591 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62039 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51793 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60238 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50838 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57915 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52395 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55311 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58322 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61514 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53217 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59322 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55296 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63998 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56635 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49396 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62620 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52318 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55051 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58611 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52322 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61706 - "GET /api/alerts?page=1&limit=12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56305 - "GET /api/data/smote-stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56304 - "GET /api/models/metrics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51344 - "GET /api/chat/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51345 - "GET /api/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59986 - "GET /api/conversations/4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64263 - "GET /api/chat/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56067 - "GET /api/chat/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64377 - "GET /api/chat/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63525 - "POST /api/auth/logout HTTP/1.1" 200 OK
+2026-08-10 21:05:35,273 - INFO - WebSocket disconnect event registered cleanly.
+2026-08-10 21:05:35,273 - INFO - Client disconnected from WebSocket. Total clients: 0
+INFO:     127.0.0.1:61399 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61670 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61670 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65478 - "POST /api/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58215 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62573 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjQ4MTg5OSwianRpIjoiYzRiNTJlMTAxNTA0YzVjYzFmY2U2MTg4ZDg0OTg2ZWMifQ.9ZsId7L-TWWthonxHSwqui0yfbWGqt_oH5ZqzCxMP10" [accepted]
+INFO:     connection open
+2026-08-11 01:58:19,778 - INFO - New client connected to WebSocket. Total clients: 1
+2026-08-11 01:58:19,781 - INFO - WebSocket disconnect event registered cleanly.
+2026-08-11 01:58:19,781 - INFO - Client disconnected from WebSocket. Total clients: 0
+INFO:     127.0.0.1:62575 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62574 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57549 - "WebSocket /ws/live?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4NjQ4MTg5OSwianRpIjoiYzRiNTJlMTAxNTA0YzVjYzFmY2U2MTg4ZDg0OTg2ZWMifQ.9ZsId7L-TWWthonxHSwqui0yfbWGqt_oH5ZqzCxMP10" [accepted]
+INFO:     connection open
+2026-08-11 01:58:19,802 - INFO - New client connected to WebSocket. Total clients: 1
+INFO:     127.0.0.1:62576 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57550 - "GET /api/simulate/scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57551 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53899 - "GET /api/data/benign-baseline HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54313 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60382 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57431 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61215 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59573 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59573 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49334 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60410 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61142 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53515 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54490 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62208 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53507 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60819 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59268 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52707 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65525 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54482 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51466 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53418 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65433 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63173 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53807 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51813 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64146 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64052 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54974 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59986 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61228 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55016 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64519 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57765 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63543 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58701 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53299 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57413 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51016 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58326 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54670 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56274 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57135 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54024 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64001 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53490 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53428 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55816 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57647 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58374 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51201 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52899 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64411 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51807 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55538 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50611 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57881 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49846 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51641 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59711 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56424 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49995 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60654 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51143 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64839 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56087 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54347 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51786 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64544 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61569 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61920 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50679 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50949 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64579 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60564 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57473 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62204 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60301 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60581 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59153 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56392 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59362 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58792 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53286 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50781 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63564 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55547 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56895 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52096 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65171 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50074 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59711 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58377 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53303 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52259 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57539 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65438 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57067 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57518 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62303 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62970 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59605 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58325 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52732 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61957 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52365 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56147 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65473 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55808 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50389 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62651 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65297 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64729 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60734 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52103 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64682 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51071 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61254 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61370 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65270 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54613 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61474 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55642 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59128 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64556 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53012 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57816 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61990 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63461 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54496 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61452 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51550 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56833 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63099 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62906 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55892 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57069 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56671 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63598 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55152 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62527 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57684 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51729 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58721 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61342 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62126 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53010 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56494 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60447 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58537 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52232 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62128 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57311 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51777 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56965 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64033 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54002 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50935 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59350 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61986 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60709 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56614 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61613 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64045 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62056 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52586 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56392 - "GET /api/simulate/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60799 - "GET /api/simulate/status HTTP/1.1" 200 OK

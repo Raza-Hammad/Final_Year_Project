@@ -1,3 +1,29 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: metadata_helper.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file generates realistic IP Addresses and Port Numbers for simulated network traffic flows.
+Since ML models train on numeric feature vectors (which drop IP/Port identifier strings to prevent leakage),
+this helper reconstructs realistic IP/Port metadata (e.g. Source IP, Destination IP, Port 80, Port 443, Port 22)
+so security analysts can inspect network origins on the dashboard topology map.
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `get_raw_flow_metadata()`: Deterministically assigns realistic IP addresses and port numbers based on threat category:
+   - **BENIGN**: Internal local clients (`192.168.10.x`) accessing Web Server (`192.168.10.50:80`).
+   - **DDoS / DoS**: External botnet IPs (`10.0.0.x`) flooding Web Server port 80.
+   - **PortScan**: Scanning internal DB Server ports (`192.168.10.51`).
+   - **SSH/FTP Brute Force**: Attacker targeting SSH (port 22) or FTP (port 21).
+   - **SQL Injection**: Attacker targeting Database Server port 3306.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `numpy.random.default_rng`: Generates deterministic random numbers seeded by flow index.
+===============================================================================
+"""
+
 import numpy as np
 
 def get_raw_flow_metadata(idx: int, label: str):

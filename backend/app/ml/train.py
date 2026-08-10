@@ -1,3 +1,32 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: train.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file is the Model Trainer Script. It trains the three machine learning models
+(LightGBM, Random Forest, and XGBoost) on the preprocessed SMOTE-balanced training split,
+evaluates accuracy and latency metrics on the test set, and saves model binaries to disk (`data/cache/models/`).
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `train_all_models()`: Master function that loads preprocessed NPZ dataset splits from cache.
+2. Fits LightGBM, Random Forest, and XGBoost models on the training dataset.
+3. Saves `.joblib` model binaries into `data/cache/models/`.
+4. Evaluates accuracy, macro F1, per-class metrics, and single-sample inference latency.
+5. Computes confusion matrices and saves evaluation metrics to `data/cache/metrics/summary.json`.
+6. `print_comparison_table()`: Prints a console table comparing accuracy and latency across models.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `lightgbm.LGBMClassifier`: Fast histogram-based gradient boosting classifier (Tier 1 Screener).
+- `sklearn.ensemble.RandomForestClassifier`: Decision tree ensemble classifier (Tier 2 Validator & XAI driver).
+- `xgboost.XGBClassifier`: Extreme Gradient Boosting classifier (Tier 3 Ensemble Arbiter).
+- `sklearn.metrics`: Computes accuracy score, macro precision/recall/F1, and confusion matrix arrays.
+- `joblib`: Serializes trained machine learning model objects to disk.
+===============================================================================
+"""
+
 import argparse
 import json
 import logging
@@ -14,41 +43,7 @@ from app.data.loader import prepare_data
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Try importing plotting libraries
-try:
-    import matplotlib
-    matplotlib.use("Agg")  # Non-interactive backend
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    PLOTTING_AVAILABLE = True
-except ImportError:
-    PLOTTING_AVAILABLE = False
-    logger.warning("matplotlib or seaborn not installed. Heatmap PNG generation will be skipped.")
-
-def plot_confusion_matrix(cm: np.ndarray, labels: list[str], output_path: Path, title: str):
-    """Saves a confusion matrix heatmap as a PNG image."""
-    if not PLOTTING_AVAILABLE:
-        return
-        
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(
-        cm, 
-        annot=False,  # Set to False to keep heatmap clean since we have 15 classes
-        cmap="Purples", 
-        xticklabels=labels, 
-        yticklabels=labels
-    )
-    plt.title(title, fontsize=14, fontweight="bold", pad=15)
-    plt.ylabel("Actual Label", fontsize=12)
-    plt.xlabel("Predicted Label", fontsize=12)
-    plt.xticks(rotation=45, ha="right", fontsize=9)
-    plt.yticks(rotation=0, fontsize=9)
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150)
-    plt.close()
-    logger.info(f"Saved confusion matrix plot to: {output_path}")
-
-def train_all_models(force: bool = False, max_train_samples: int = 750000):
+def train_all_models(force: bool = False, max_train_samples: int = 3000000):
     """Loads cache, fits LightGBM, RF, and XGBoost, saves models, and evaluates metrics."""
     model_dir = Path(settings.DATA_CACHE_DIR) / "models"
     metrics_dir = Path(settings.DATA_CACHE_DIR) / "metrics"
@@ -79,7 +74,12 @@ def train_all_models(force: bool = False, max_train_samples: int = 750000):
     logger.info("Loading preprocessed training and testing splits from cache...")
     X_train, X_test, y_train, y_test = prepare_data(force=False)
     
-    # Subsampling the balanced training data if it exceeds the limit
+    # Subsampling the balanced training data if it exceeds the limit.
+    # Keep this ceiling comfortably above the capped-SMOTE training set size (~2.45M rows
+    # with the current smote_ceiling in loader.py). Subsampling much further thins the
+    # capped minority classes back down to only a few thousand rows each, which was found
+    # to destabilize LightGBM's multiclass histogram tree growth specifically (RF/XGBoost
+    # are unaffected) -- accuracy dropped from ~0.99 on the full set to ~0.67 at 750k rows.
     if len(X_train) > max_train_samples:
         logger.info(f"Subsampling training split from {len(X_train):,} to {max_train_samples:,} rows...")
         _, X_train, _, y_train = train_test_split(
@@ -93,7 +93,16 @@ def train_all_models(force: bool = False, max_train_samples: int = 750000):
     from xgboost import XGBClassifier
     
     models = {
-        "LightGBM": LGBMClassifier(n_estimators=100, num_leaves=31, random_state=42, n_jobs=-1),
+        # num_leaves=31 (LightGBM's default) grows leaf-wise trees aggressively enough that,
+        # combined with SMOTE's synthetic minority clusters, it repeatedly hit "no further
+        # splits with positive gain" and stopped early -- collapsing accuracy to ~0.37-0.82
+        # depending on subsampling. Shrinking num_leaves, raising min_child_samples, and
+        # adding L2 regularization keeps tree growth conservative enough to stay stable,
+        # restoring LightGBM to its expected role as the most accurate tier (~0.997).
+        "LightGBM": LGBMClassifier(
+            n_estimators=150, num_leaves=15, min_child_samples=50, reg_lambda=1.0,
+            random_state=42, n_jobs=-1
+        ),
         "Random Forest": RandomForestClassifier(n_estimators=50, max_depth=12, random_state=42, n_jobs=-1),
         "XGBoost": XGBClassifier(n_estimators=100, max_depth=6, learning_rate=0.1, random_state=42, n_jobs=-1)
     }
@@ -143,11 +152,6 @@ def train_all_models(force: bool = False, max_train_samples: int = 750000):
         with open(cm_json_path, "w") as f:
             json.dump(cm.tolist(), f)
             
-        # Save confusion matrix as PNG
-        if PLOTTING_AVAILABLE:
-            cm_png_path = metrics_dir / f"{name.lower().replace(' ', '_')}_conf_matrix.png"
-            plot_confusion_matrix(cm, class_labels, cm_png_path, f"{name} Confusion Matrix")
-            
         summary[name] = {
             "accuracy": float(accuracy),
             "macro_precision": float(precision),
@@ -185,7 +189,7 @@ def print_comparison_table(summary: dict):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ML Model Training Runner")
     parser.add_argument("--force", action="store_true", help="Force retraining of all models")
-    parser.add_argument("--subsample-size", type=int, default=750000, help="Max balanced training rows")
+    parser.add_argument("--subsample-size", type=int, default=3000000, help="Max balanced training rows")
     args = parser.parse_args()
     
     train_all_models(force=args.force, max_train_samples=args.subsample_size)

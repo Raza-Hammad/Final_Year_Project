@@ -1,5 +1,30 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: gemini_key_manager.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file manages API Key Rotation and Quota Handling for Google Gemini AI.
+To prevent the Sentinel AI Assistant from stopping if a free-tier Gemini API key hits
+a rate limit or quota exhaustion, this manager automatically rotates across multiple API keys seamlessly.
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `GeminiKeyManager.__init__()`: Loads list of comma-separated Gemini API keys from settings (`.env`).
+2. `get_current_key()`: Thread-safe method to return the active, non-exhausted API key.
+3. `mark_exhausted()`: Temporarily blacklists a key if Gemini returns a 429 Rate Limit/Quota error and switches to the next key.
+4. `rotate()`: Rotates key usage sequentially to balance request volume across keys.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `threading.Lock`: Thread synchronization primitive to prevent race conditions during concurrent API requests.
+- `logging`: Logs key switches and quota warnings.
+===============================================================================
+"""
+
 import logging
 import threading
+from typing import Optional
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -8,17 +33,20 @@ class GeminiKeyManager:
     def __init__(self):
         self.lock = threading.Lock()
         self.keys = settings.GEMINI_API_KEYS
-        if not self.keys:
-            raise ValueError(
-                "CRITICAL STARTUP ERROR: No Gemini API keys found in env variable 'GEMINI_API_KEYS'. "
-                "Please configure at least one key in backend/.env."
-            )
         self.current_index = 0
         self.exhausted = set()
-        logger.info(f"Loaded {len(self.keys)} Gemini API keys")
+        if not self.keys:
+            logger.warning(
+                "No Gemini API keys found in env variable 'GEMINI_API_KEYS'. "
+                "AI Assistant will run in rule-based/offline mode only until backend/.env is configured."
+            )
+        else:
+            logger.info(f"Loaded {len(self.keys)} Gemini API keys")
 
-    def get_current_key(self) -> str:
+    def get_current_key(self) -> Optional[str]:
         with self.lock:
+            if not self.keys:
+                return None
             # If all keys are exhausted, clear and reset
             if len(self.exhausted) >= len(self.keys):
                 self.exhausted.clear()

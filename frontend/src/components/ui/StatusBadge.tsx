@@ -1,3 +1,24 @@
+/**
+ * ===============================================================================
+ * STUDENT EXPLANATORY GUIDE: StatusBadge.tsx
+ * ===============================================================================
+ * WHAT THIS FILE IS FOR:
+ * ----------------------
+ * This file renders Security Status Pills & Severity Badges across the application.
+ * It translates threat levels (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `SECURE`, `CONNECTED`)
+ * into color-coded status badges with pulsing status dots.
+ * 
+ * KEY FUNCTIONALITIES:
+ * --------------------
+ * 1. Color Palette Mapping: Automatically assigns semantic design tokens (`--sr-sev-critical`, `--sr-sev-high`, `--sr-sev-info`).
+ * 2. Status Dot Animation: Adds pulsing animations (`animate-pulse`) for active threats and live connections.
+ * 
+ * LIBRARIES & TOOLS USED:
+ * -----------------------
+ * - `react`: Standard React component props typing.
+ * ===============================================================================
+ */
+
 import React from 'react';
 
 interface StatusBadgeProps {
@@ -7,63 +28,63 @@ interface StatusBadgeProps {
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
   const statusUpper = status.toUpperCase();
-  
+
   let badgeStyle = {
-    color: 'var(--text-secondary)',
-    bg: 'rgba(148, 163, 184, 0.08)',
-    dot: 'bg-slate-400'
+    color: 'var(--sr-text-secondary)',
+    bg: 'var(--sr-bg-surface-raised)',
+    dot: 'bg-[var(--sr-text-muted)]'
   };
 
   if (statusUpper === 'CRITICAL' || statusUpper === 'UNDER ATTACK') {
     badgeStyle = {
-      color: 'var(--color-critical)',
-      bg: 'rgba(239, 68, 68, 0.12)',
-      dot: 'bg-red-500 animate-pulse'
+      color: 'var(--sr-sev-critical)',
+      bg: 'rgba(208, 59, 59, 0.08)',
+      dot: 'bg-[var(--sr-sev-critical)] animate-pulse'
     };
   } else if (statusUpper === 'HIGH' || statusUpper === 'ELEVATED' || statusUpper === 'ELEVATED RISK') {
     badgeStyle = {
-      color: 'var(--color-high)',
-      bg: 'rgba(249, 115, 22, 0.12)',
-      dot: 'bg-orange-500 animate-pulse'
+      color: 'var(--sr-sev-high)',
+      bg: 'rgba(236, 131, 90, 0.10)',
+      dot: 'bg-[var(--sr-sev-high)] animate-pulse'
     };
   } else if (statusUpper === 'MEDIUM') {
     badgeStyle = {
-      color: 'var(--color-medium)',
-      bg: 'rgba(245, 166, 35, 0.12)',
-      dot: 'bg-amber-500'
+      color: '#8A6300',
+      bg: 'rgba(250, 178, 25, 0.16)',
+      dot: 'bg-[var(--sr-sev-medium)]'
     };
   } else if (statusUpper === 'LOW' || statusUpper === 'INFO') {
     badgeStyle = {
-      color: 'var(--color-low)',
-      bg: 'rgba(100, 116, 139, 0.12)',
-      dot: 'bg-slate-500'
+      color: 'var(--sr-text-secondary)',
+      bg: 'var(--sr-bg-surface-raised)',
+      dot: 'bg-[var(--sr-sev-low)]'
     };
   } else if (statusUpper === 'SECURE' || statusUpper === 'CONNECTED' || statusUpper === 'SUCCESS' || statusUpper === 'OK' || statusUpper === 'ACTIVE') {
     badgeStyle = {
-      color: 'var(--color-calm)',
-      bg: 'rgba(45, 212, 191, 0.12)',
-      dot: 'bg-teal-400 animate-pulse'
+      color: 'var(--sr-sev-info)',
+      bg: 'rgba(12, 163, 12, 0.08)',
+      dot: 'bg-[var(--sr-sev-info)] animate-pulse'
     };
   } else if (statusUpper === 'GEMINI' || statusUpper === 'AI GEMINI') {
     badgeStyle = {
-      color: 'var(--accent-amber)',
-      bg: 'rgba(245, 166, 35, 0.12)',
-      dot: 'bg-[var(--accent-amber)] animate-pulse'
+      color: 'var(--sr-accent)',
+      bg: 'var(--sr-accent-soft)',
+      dot: 'bg-[var(--sr-accent)] animate-pulse'
     };
   } else if (statusUpper === 'RULE-BASED' || statusUpper === 'RULE') {
     badgeStyle = {
-      color: 'var(--color-calm)',
-      bg: 'rgba(45, 212, 191, 0.12)',
-      dot: 'bg-teal-400'
+      color: 'var(--sr-cat-3)',
+      bg: 'rgba(27, 175, 122, 0.10)',
+      dot: 'bg-[var(--sr-cat-3)]'
     };
   }
 
   return (
-    <span 
+    <span
       style={{ color: badgeStyle.color, backgroundColor: badgeStyle.bg }}
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider rounded-full border border-current/10 ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-medium rounded-full border border-[var(--sr-border-hairline)] ${className}`}
     >
-      <span className={`w-1 h-1 rounded-full ${badgeStyle.dot}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot}`} />
       {status}
     </span>
   );

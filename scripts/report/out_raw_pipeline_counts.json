@@ -1,0 +1,103 @@
+{
+  "csv_files_found": [
+    "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+    "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+    "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+    "Monday-WorkingHours.pcap_ISCX.csv",
+    "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+    "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+    "Tuesday-WorkingHours.pcap_ISCX.csv",
+    "Wednesday-workingHours.pcap_ISCX.csv"
+  ],
+  "per_file": [
+    {
+      "file": "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+      "raw_rows": 225745,
+      "raw_columns": 85,
+      "cleaned_rows": 225711,
+      "rows_dropped_this_file": 34
+    },
+    {
+      "file": "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+      "raw_rows": 286467,
+      "raw_columns": 85,
+      "cleaned_rows": 286096,
+      "rows_dropped_this_file": 371
+    },
+    {
+      "file": "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+      "raw_rows": 191033,
+      "raw_columns": 85,
+      "cleaned_rows": 190911,
+      "rows_dropped_this_file": 122
+    },
+    {
+      "file": "Monday-WorkingHours.pcap_ISCX.csv",
+      "raw_rows": 529918,
+      "raw_columns": 85,
+      "cleaned_rows": 529481,
+      "rows_dropped_this_file": 437
+    },
+    {
+      "file": "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+      "raw_rows": 288602,
+      "raw_columns": 85,
+      "cleaned_rows": 288395,
+      "rows_dropped_this_file": 207
+    },
+    {
+      "file": "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+      "raw_rows": 458968,
+      "raw_columns": 85,
+      "cleaned_rows": 170231,
+      "rows_dropped_this_file": 288737
+    },
+    {
+      "file": "Tuesday-WorkingHours.pcap_ISCX.csv",
+      "raw_rows": 445909,
+      "raw_columns": 85,
+      "cleaned_rows": 445645,
+      "rows_dropped_this_file": 264
+    },
+    {
+      "file": "Wednesday-workingHours.pcap_ISCX.csv",
+      "raw_rows": 692703,
+      "raw_columns": 85,
+      "cleaned_rows": 691406,
+      "rows_dropped_this_file": 1297
+    }
+  ],
+  "total_raw_rows_all_files": 3119345,
+  "total_cleaned_rows_all_files_before_concat_dedup": 2827876,
+  "captured_logs": [
+    "Searching recursively for CSV files in D:\\Final_Year_Project\\data\\raw",
+    "Found 2 distinct directories containing TrafficLabelling-style CSVs (likely redundant packagings of the same dataset): [WindowsPath('D:/Final_Year_Project/data/raw/MachineLearningCSV/MachineLearningCVE'), WindowsPath('D:/Final_Year_Project/data/raw/GeneratedLabelledFlows/TrafficLabelling')]. Using only 'D:\\Final_Year_Project\\data\\raw\\GeneratedLabelledFlows\\TrafficLabelling' (8 files) to avoid duplicate/mismatched-schema rows. Skipping: [WindowsPath('D:/Final_Year_Project/data/raw/MachineLearningCSV/MachineLearningCVE')].",
+    "Found 8 TrafficLabelling CSVs via recursive naming match.",
+    "[Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv] Replaced 64 positive/negative infinity values with NaN.",
+    "[Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv] Dropped 34 rows containing remaining NaN values.",
+    "[Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv] Cleaned: 225,745 -> 225,711 rows (34 rows dropped in total).",
+    "[Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv] Replaced 727 positive/negative infinity values with NaN.",
+    "[Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv] Dropped 371 rows containing remaining NaN values.",
+    "[Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv] Cleaned: 286,467 -> 286,096 rows (371 rows dropped in total).",
+    "[Friday-WorkingHours-Morning.pcap_ISCX.csv] Replaced 216 positive/negative infinity values with NaN.",
+    "[Friday-WorkingHours-Morning.pcap_ISCX.csv] Dropped 122 rows containing remaining NaN values.",
+    "[Friday-WorkingHours-Morning.pcap_ISCX.csv] Cleaned: 191,033 -> 190,911 rows (122 rows dropped in total).",
+    "[Monday-WorkingHours.pcap_ISCX.csv] Replaced 810 positive/negative infinity values with NaN.",
+    "[Monday-WorkingHours.pcap_ISCX.csv] Dropped 437 rows containing remaining NaN values.",
+    "[Monday-WorkingHours.pcap_ISCX.csv] Cleaned: 529,918 -> 529,481 rows (437 rows dropped in total).",
+    "[Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv] Replaced 396 positive/negative infinity values with NaN.",
+    "[Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv] Dropped 207 rows containing remaining NaN values.",
+    "[Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv] Cleaned: 288,602 -> 288,395 rows (207 rows dropped in total).",
+    "UTF-8 decode failed for Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv. Retrying with latin-1 fallback.",
+    "[Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv] Dropped 288,602 fully-empty rows.",
+    "[Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv] Replaced 250 positive/negative infinity values with NaN.",
+    "[Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv] Dropped 135 rows containing remaining NaN values.",
+    "[Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv] Cleaned: 458,968 -> 170,231 rows (288,737 rows dropped in total).",
+    "[Tuesday-WorkingHours.pcap_ISCX.csv] Replaced 327 positive/negative infinity values with NaN.",
+    "[Tuesday-WorkingHours.pcap_ISCX.csv] Dropped 264 rows containing remaining NaN values.",
+    "[Tuesday-WorkingHours.pcap_ISCX.csv] Cleaned: 445,909 -> 445,645 rows (264 rows dropped in total).",
+    "[Wednesday-workingHours.pcap_ISCX.csv] Replaced 1,586 positive/negative infinity values with NaN.",
+    "[Wednesday-workingHours.pcap_ISCX.csv] Dropped 1,297 rows containing remaining NaN values.",
+    "[Wednesday-workingHours.pcap_ISCX.csv] Cleaned: 692,703 -> 691,406 rows (1,297 rows dropped in total)."
+  ]
+}

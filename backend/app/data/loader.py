@@ -1,3 +1,35 @@
+"""
+===============================================================================
+STUDENT EXPLANATORY GUIDE: loader.py
+===============================================================================
+WHAT THIS FILE IS FOR:
+----------------------
+This file is the Dataset Preprocessor and Data Pipeline Manager.
+It cleans the raw CICIDS2017 network traffic dataset, removes missing/corrupted values,
+performs feature selection to pick the 30 most important features, and balances minority
+attack classes using SMOTE oversampling (capped at 20,000 samples per class).
+
+KEY FUNCTIONALITIES:
+--------------------
+1. `clean_dataframe()`: Strips whitespace, removes infinities, drops NaN rows, and standardizes labels.
+2. `load_dataset()`: Loads all raw network CSV files from disk and concatenates them into one DataFrame.
+3. `prepare_data()`: The master pipeline function:
+   - Drops identifier columns (e.g., IPs and Ports) to prevent data leakage.
+   - Splits data into 80/20 train/test sets using stratified sampling.
+   - Trains a Random Forest on a subsample to select the top 30 network features.
+   - Applies SMOTE oversampling **strictly to X_train** (capped at 20,000 samples/class).
+   - Scales features with StandardScaler and saves compressed NPZ splits to `data/cache/`.
+
+LIBRARIES & TOOLS USED:
+-----------------------
+- `pandas` & `numpy`: High-performance DataFrames, numeric operations, and missing value cleanup.
+- `imblearn.over_sampling.SMOTE`: Synthetic Minority Over-sampling Technique to balance attack classes.
+- `sklearn.preprocessing` (`StandardScaler`, `LabelEncoder`): Normalizes numeric features and encodes class labels.
+- `sklearn.ensemble.RandomForestClassifier`: Measures feature importances to pick top 30 features.
+- `joblib`: Caches trained preprocessing scalers and label encoders.
+===============================================================================
+"""
+
 import logging
 from pathlib import Path
 import numpy as np
@@ -121,11 +153,33 @@ def find_csv_files(data_dir: Path) -> list[Path]:
     
     # Filter to TrafficLabelling style names
     traffic_csvs = [
-        f for f in all_csvs 
+        f for f in all_csvs
         if "workinghours" in f.name.lower() or "pcap_iscx.csv" in f.name.lower()
     ]
-    
+
     if traffic_csvs:
+        # CIC-IDS-2017 is commonly distributed as two redundant packagings of the
+        # SAME underlying flows ("GeneratedLabelledFlows" with identifier columns,
+        # "MachineLearningCSV/MachineLearningCVE" without them). If both are present
+        # under data_dir, loading both would double every row and, since their column
+        # sets differ (e.g. "Protocol" only exists in one), pd.concat would inject
+        # NaNs that later crash RandomForestClassifier during feature selection.
+        # Group by parent directory and keep only the largest group.
+        groups: dict[Path, list[Path]] = {}
+        for f in traffic_csvs:
+            groups.setdefault(f.parent, []).append(f)
+
+        if len(groups) > 1:
+            chosen_dir = max(sorted(groups, key=str), key=lambda d: len(groups[d]))
+            skipped = [d for d in groups if d != chosen_dir]
+            logger.warning(
+                f"Found {len(groups)} distinct directories containing TrafficLabelling-style CSVs "
+                f"(likely redundant packagings of the same dataset): {list(groups.keys())}. "
+                f"Using only '{chosen_dir}' ({len(groups[chosen_dir])} files) to avoid duplicate/"
+                f"mismatched-schema rows. Skipping: {skipped}."
+            )
+            traffic_csvs = groups[chosen_dir]
+
         logger.info(f"Found {len(traffic_csvs)} TrafficLabelling CSVs via recursive naming match.")
         return traffic_csvs
         
@@ -278,7 +332,7 @@ def prepare_data(force: bool = False, top_k: int = 30) -> tuple[np.ndarray, np.n
     # Dynamic neighbor threshold to avoid crashing on tiny classes
     min_class_count = int(np.min(count_before))
     k_neighbors = min(5, min_class_count - 1)
-    
+
     if k_neighbors < 1:
         k_neighbors = 1
         logger.warning(
@@ -287,8 +341,29 @@ def prepare_data(force: bool = False, top_k: int = 30) -> tuple[np.ndarray, np.n
         )
     else:
         logger.info(f"Setting SMOTE k_neighbors={k_neighbors} based on minimum class count of {min_class_count}")
-        
-    smote = SMOTE(k_neighbors=k_neighbors, random_state=42)
+
+    # Cap the oversampling target instead of fully matching the majority class.
+    # CIC-IDS-2017's class sizes span ~9 (Heartbleed) to ~1.8M (BENIGN) in the training
+    # split -- fully balancing to the majority count (sampling_strategy="auto") forces
+    # SMOTE to interpolate the same handful of minority points into hundreds of thousands
+    # of near-duplicate synthetic rows (e.g. ~200,000x for Heartbleed). Empirically this
+    # extreme duplication destabilizes LightGBM's histogram-based tree growth (training
+    # accuracy *drops* as more boosting rounds are added -- a sign of divergence, not
+    # underfitting), even though Random Forest/XGBoost tolerate it. Capping the target
+    # keeps SMOTE's intended role (give minority classes real gradient signal) without
+    # manufacturing a synthetic manifold so dense it destabilizes training.
+    smote_ceiling = 20000
+    sampling_strategy = {
+        int(label): smote_ceiling
+        for label, cnt in zip(unique_labels, count_before)
+        if cnt < smote_ceiling
+    }
+    logger.info(
+        f"Capping SMOTE oversampling target at {smote_ceiling:,} samples/class "
+        f"(classes already at/above this are left untouched): {sampling_strategy}"
+    )
+
+    smote = SMOTE(k_neighbors=k_neighbors, sampling_strategy=sampling_strategy, random_state=42)
     X_train_resampled, y_train_resampled = smote.fit_resample(X_train_filtered, y_train)
     
     # Calculate class distribution after SMOTE
