@@ -9,6 +9,8 @@ import tempfile
 
 # Must happen before `app.config`/`app.db.session` are imported anywhere (including
 # transitively via `app.main`), since DATABASE_URL is read once at import time.
+# Deterministic admin seed password for the isolated test DB only.
+os.environ.setdefault("ADMIN_SEED_PASSWORD", "Admin@652f0915!")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{tempfile.mktemp(suffix='.db')}")
 
 import pytest
@@ -34,6 +36,18 @@ def auth_headers(client):
     client.post("/api/auth/register", json={"username": username, "password": password})
     resp = client.post("/api/auth/login", data={"username": username, "password": password})
     assert resp.status_code == 200, f"Shared test analyst login failed: {resp.text}"
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="session")
+def admin_headers(client):
+    """Authorization header for the lifespan-seeded admin account (Phase 5 RBAC)."""
+    resp = client.post(
+        "/api/auth/login",
+        data={"username": "admin", "password": "Admin@652f0915!"},
+    )
+    assert resp.status_code == 200, f"Shared test admin login failed: {resp.text}"
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 

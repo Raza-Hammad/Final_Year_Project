@@ -1,0 +1,11 @@
+{
+  "status": "experimental_non_production",
+  "do_not_load_in_cascade_detector": true,
+  "production_models": "models/*.joblib (mid_baseline)",
+  "experimental_note": "models/hardened/*.joblib are EXPERIMENTAL / NON-PRODUCTION. CascadeDetector loads only models/*.joblib (mid-eval baseline). Reduced RandomizedSearchCV runs that regress macro-F1 must not replace production.",
+  "search_samples": 40000,
+  "final_train_samples": 100000,
+  "n_iter_per_model": 4,
+  "recommendation": "keep_baseline",
+  "updated_unix": 1794602334.9773278
+}

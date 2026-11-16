@@ -24,9 +24,16 @@ LIBRARIES & TOOLS USED:
 ===============================================================================
 """
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import SQLModel, Field
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now() -> datetime:
+    """Timezone-aware UTC now (required by SQLModel 0.0.50+ DateTime bind)."""
+    return datetime.now(timezone.utc)
+
 
 class User(SQLModel, table=True):
     """Database model for application users authentication."""
@@ -34,12 +41,23 @@ class User(SQLModel, table=True):
     username: str = Field(unique=True, index=True)
     hashed_password: str
     role: str = Field(default="analyst")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Lifetime count of successful Nebius/LLM chat replies (rule-based answers do not increment).
+    ai_queries_used: int = Field(default=0)
+    # Google Sign-In linkage (optional; password users leave these null).
+    email: Optional[str] = Field(default=None, index=True)
+    google_sub: Optional[str] = Field(default=None, index=True, unique=True)
+    created_at: datetime = Field(default_factory=_utc_now)
+
+
+class GoogleAuthRequest(SQLModel):
+    """Body for SPA Google Sign-In: GIS ID token and/or authorization code."""
+    id_token: Optional[str] = None
+    code: Optional[str] = None
 
 class Alert(SQLModel, table=True):
     """Database model for security threat alerts triggered by malicious flows."""
     id: Optional[int] = Field(default=None, primary_key=True)
-    timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
+    timestamp: datetime = Field(default_factory=_utc_now, index=True)
     predicted_label: str = Field(index=True)
     confidence: float
     tier: int = Field(index=True)
@@ -51,6 +69,44 @@ class Alert(SQLModel, table=True):
     dest_port: int = Field(default=0)
     raw_features: str = Field(default="{}")  # JSON-encoded input feature dictionary
 
+
+class Review(SQLModel, table=True):
+    """One public product review per user (editable). Rendered as plain text only."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True)
+    author_display: str = Field(default="Anonymous")
+    rating: int = Field(default=5)
+    title: str = Field(default="")
+    body: str = Field(default="")
+    would_recommend: bool = Field(default=True)
+    suggestion: str = Field(default="")
+    tags: str = Field(default="[]")  # JSON list from a fixed vocabulary
+    status: str = Field(default="published", index=True)  # published | hidden
+    helpful_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=_utc_now, index=True)
+    updated_at: datetime = Field(default_factory=_utc_now)
+    edited: bool = Field(default=False)
+
+
+class ReviewHelpful(SQLModel, table=True):
+    """A user marking a review helpful (unique per review/user pair)."""
+    __table_args__ = (UniqueConstraint("review_id", "user_id", name="uq_reviewhelpful_pair"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    review_id: int = Field(foreign_key="review.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+
+
+class AuditLog(SQLModel, table=True):
+    """Append-only audit trail for sensitive admin/analyst actions."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    timestamp: datetime = Field(default_factory=_utc_now, index=True)
+    user_id: Optional[int] = Field(default=None, index=True)
+    username: str = Field(default="", index=True)
+    role: str = Field(default="")
+    action: str = Field(index=True)  # e.g. simulate.start, pcap.analyze, alerts.export
+    detail: str = Field(default="{}")  # JSON-encoded context
+    ip_address: Optional[str] = Field(default=None)
+
 class Conversation(SQLModel, table=True):
     """Database model for a saved AI Assistant conversation thread. Conversations
     started in incognito mode are never persisted, so no row exists for them."""
@@ -58,8 +114,8 @@ class Conversation(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     title: str = Field(default="New conversation")
     pinned: bool = Field(default=False, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now, index=True)
+    updated_at: datetime = Field(default_factory=_utc_now)
 
 class ChatMessage(SQLModel, table=True):
     """Database model for a single message within a saved Conversation."""
@@ -67,8 +123,8 @@ class ChatMessage(SQLModel, table=True):
     conversation_id: int = Field(foreign_key="conversation.id", index=True)
     role: str  # 'user' | 'assistant'
     content: str
-    source: Optional[str] = None  # 'Rule-Based' | 'AI Gemini' | 'Error Fallback' | ...
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    source: Optional[str] = None  # 'Rule-Based' | 'AI Nebius' | 'Error Fallback' | ...
+    created_at: datetime = Field(default_factory=_utc_now)
 
 class ConversationSummary(SQLModel):
     """Schema for a conversation list item (no message bodies)."""
@@ -112,6 +168,7 @@ class UserResponse(SQLModel):
     id: int
     username: str
     role: str
+    ai_queries_used: int = 0
     created_at: datetime
 
 class Token(SQLModel):

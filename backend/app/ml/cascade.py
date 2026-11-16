@@ -39,6 +39,28 @@ from app.ml.severity import compute_severity
 
 logger = logging.getLogger(__name__)
 
+# Honest single-flow cascade throughput measured on this host (~44 flows/s).
+# Batch/vectorized ``detect_batch`` raises sustained throughput for PCAP analyze;
+# the simulator still paces one flow at a time so UI caps stay honest.
+SINGLE_FLOW_THROUGHPUT_FPS = 44
+# Conservative advertised batch floor after vectorized Tier-1 screening (host-dependent).
+BATCH_THROUGHPUT_FPS = 120
+
+
+def resolve_model_dir(cache_dir: Path | None = None) -> tuple[Path, str]:
+    """Resolve production model directory for CascadeDetector.
+
+    **Always** loads ``models/*.joblib`` (mid-eval production baseline).
+    Never loads ``models/hardened/`` — those artifacts are experimental only
+    (Phase 5 reduced search regresses macro-F1 vs mid). ``active_variant.json``
+    is Insights metadata and must not redirect production inference.
+    """
+    cache = Path(cache_dir or settings.DATA_CACHE_DIR)
+    model_dir = cache / "models"
+    # Production is always the live mid baseline paths — ignore hardened/.
+    return model_dir, "mid_baseline"
+
+
 class CascadeDetector:
     """Multi-tier inference cascade detector for cybersecurity threats.
 
@@ -48,6 +70,10 @@ class CascadeDetector:
         >= threshold, return it.
       - Tier 2: Random Forest (Explainable Validator). If max probability >= threshold, return it.
       - Tier 3: XGBoost & Weighted Vote (Expert Ensemble). Uses a weighted probability vote across all three models.
+
+    Public API (do not break callers — simulator / pcap / replay):
+      - ``detect(features_dict)`` single-flow path
+      - ``detect_batch(list[dict])`` vectorized multi-flow path
     """
     
     def __init__(self, confidence_threshold: float = 0.85, weights: dict = None):
@@ -61,7 +87,7 @@ class CascadeDetector:
         self.weights = weights or {"lightgbm": 0.2, "random_forest": 0.3, "xgboost": 0.5}
         
         cache_dir = Path(settings.DATA_CACHE_DIR)
-        model_dir = cache_dir / "models"
+        model_dir, self.model_variant = resolve_model_dir(cache_dir)
         
         scaler_path = cache_dir / "scaler.joblib"
         encoder_path = cache_dir / "label_encoder.joblib"
@@ -87,7 +113,7 @@ class CascadeDetector:
         for name, path in models_to_load.items():
             if not path.exists():
                 raise FileNotFoundError(f"Model file {path.name} not found. Run training script first.")
-            logger.info(f"Loading {name} model into memory...")
+            logger.info("Loading %s model into memory (variant=%s)...", name, self.model_variant)
             self.models[name] = joblib.load(path)
             
         # Load or precompute benign averages once
@@ -136,13 +162,16 @@ class CascadeDetector:
             
         logger.info("CascadeDetector initialized and all assets loaded.")
         
-    def detect(self, features_dict: dict, threshold: float = None) -> dict:
+    def detect(self, features_dict: dict, threshold: float = None, trace: bool = False) -> dict:
         """Classifies a network packet flow using the 3-tier cascade and provides XAI explanations.
         
         Args:
             features_dict (dict): Raw feature mapping from packet flow.
             threshold (float): Confidence threshold to trigger escalation. Defaults to self.confidence_threshold.
-            
+            trace (bool): When True, attach a ``trace`` list describing what every tier
+                evaluated (model, top label, confidence, whether it cleared the gate).
+                Tiers the flow never reached are reported as ``reached: False``.
+
         Returns:
             dict: containing:
               - predicted_label (str): Name of the predicted class (decoded).
@@ -151,6 +180,7 @@ class CascadeDetector:
               - tier_name (str): Readable name of the tier that resolved the request.
               - top_features (list): 3-5 most important features for this decision.
               - raw_features (dict): The original flow packet features mapping.
+              - trace (list, only when ``trace=True``): per-tier evaluation records.
         """
         if threshold is None:
             threshold = self.confidence_threshold
@@ -205,9 +235,22 @@ class CascadeDetector:
         lgb_class_idx = np.argmax(lgb_probs)
         lgb_conf = float(lgb_probs[lgb_class_idx])
         
+        trace_rows: list[dict] = []
+        if trace:
+            t1_label = str(self.label_encoder.inverse_transform([lgb_class_idx])[0])
+            trace_rows.append({
+                "tier": 1,
+                "model": "LightGBM",
+                "reached": True,
+                "top_label": t1_label,
+                "confidence": lgb_conf,
+                "threshold": float(threshold),
+                "passed_gate": bool(lgb_conf >= threshold),
+            })
+
         if lgb_conf >= threshold:
             predicted_class = self.label_encoder.inverse_transform([lgb_class_idx])[0]
-            return {
+            result_t1 = {
                 "predicted_label": str(predicted_class),
                 "confidence": lgb_conf,
                 "tier": 1,
@@ -217,6 +260,11 @@ class CascadeDetector:
                 "benign_averages": self.benign_averages,
                 "severity": compute_severity(str(predicted_class), lgb_conf)
             }
+            if trace:
+                trace_rows.append({"tier": 2, "model": "Random Forest", "reached": False})
+                trace_rows.append({"tier": 3, "model": "Weighted Vote", "reached": False})
+                result_t1["trace"] = trace_rows
+            return result_t1
             
         # --- Tier 2: Random Forest (Explainable Validator) ---
         rf_model = self.models["random_forest"]
@@ -224,9 +272,20 @@ class CascadeDetector:
         rf_class_idx = np.argmax(rf_probs)
         rf_conf = float(rf_probs[rf_class_idx])
         
+        if trace:
+            trace_rows.append({
+                "tier": 2,
+                "model": "Random Forest",
+                "reached": True,
+                "top_label": str(self.label_encoder.inverse_transform([rf_class_idx])[0]),
+                "confidence": rf_conf,
+                "threshold": float(threshold),
+                "passed_gate": bool(rf_conf >= threshold),
+            })
+
         if rf_conf >= threshold:
             predicted_class = self.label_encoder.inverse_transform([rf_class_idx])[0]
-            return {
+            result_t2 = {
                 "predicted_label": str(predicted_class),
                 "confidence": rf_conf,
                 "tier": 2,
@@ -236,6 +295,10 @@ class CascadeDetector:
                 "benign_averages": self.benign_averages,
                 "severity": compute_severity(str(predicted_class), rf_conf)
             }
+            if trace:
+                trace_rows.append({"tier": 3, "model": "Weighted Vote", "reached": False})
+                result_t2["trace"] = trace_rows
+            return result_t2
             
         # --- Tier 3: XGBoost & Weighted Vote (Expert Ensemble) ---
         xgb_model = self.models["xgboost"]
@@ -251,7 +314,7 @@ class CascadeDetector:
         final_conf = float(weighted_probs[final_class_idx])
         
         predicted_class = self.label_encoder.inverse_transform([final_class_idx])[0]
-        return {
+        result_t3 = {
             "predicted_label": str(predicted_class),
             "confidence": final_conf,
             "tier": 3,
@@ -261,6 +324,167 @@ class CascadeDetector:
             "benign_averages": self.benign_averages,
             "severity": compute_severity(str(predicted_class), final_conf)
         }
+        if trace:
+            trace_rows.append({
+                "tier": 3,
+                "model": "Weighted Vote",
+                "reached": True,
+                "top_label": str(predicted_class),
+                "confidence": final_conf,
+                "threshold": None,
+                "passed_gate": True,
+                "xgboost_top_label": str(self.label_encoder.inverse_transform([int(np.argmax(xgb_probs))])[0]),
+                "xgboost_confidence": float(np.max(xgb_probs)),
+                "weights": {"lightgbm": w_lgb, "random_forest": w_rf, "xgboost": w_xgb},
+            })
+            result_t3["trace"] = trace_rows
+        return result_t3
+
+    def _align_matrix(self, features_list: list[dict]) -> tuple[np.ndarray, list[dict]]:
+        """Build an (N, F) raw feature matrix aligned to ``selected_features``."""
+        if not features_list:
+            return np.empty((0, len(self.selected_features)), dtype=np.float64), []
+        rows = []
+        for features_dict in features_list:
+            row = [float(features_dict.get(feat, 0.0)) for feat in self.selected_features]
+            rows.append(row)
+        return np.asarray(rows, dtype=np.float64), features_list
+
+    def _top_features_for_row(
+        self, scaled_row: np.ndarray, features_dict: dict, num_features: int = 4
+    ) -> list[dict]:
+        """Local XAI attributions for one scaled sample (RF importances × value)."""
+        importances = self.models["random_forest"].feature_importances_
+        impacts = scaled_row * importances
+        sorted_indices = np.argsort(np.abs(impacts))[::-1][:num_features]
+        top_feats = []
+        for idx in sorted_indices:
+            feat_name = self.selected_features[idx]
+            top_feats.append({
+                "feature": feat_name,
+                "value": float(features_dict.get(feat_name, 0.0)),
+                "importance": float(importances[idx]),
+                "impact": float(impacts[idx]),
+                "benign_avg": float(self.benign_averages.get(feat_name, 0.0)),
+            })
+        return top_feats
+
+    def detect_batch(
+        self, features_list: list[dict], threshold: float = None
+    ) -> list[dict]:
+        """Vectorized multi-flow cascade classification.
+
+        Runs Tier-1 ``predict_proba`` on the full batch, then escalates only the
+        uncertain subset to Tier 2 / Tier 3. Result dicts match ``detect()`` so
+        simulator / PCAP / replay consumers stay compatible.
+
+        Args:
+            features_list: Raw feature dicts (one per flow).
+            threshold: Escalation confidence threshold (default: instance threshold).
+
+        Returns:
+            List of detection dicts in the same order as ``features_list``.
+        """
+        if threshold is None:
+            threshold = self.confidence_threshold
+        if not features_list:
+            return []
+
+        import pandas as pd
+
+        raw_matrix, _ = self._align_matrix(features_list)
+        scaled_matrix = self.scaler.transform(raw_matrix)
+        scaled_df = pd.DataFrame(scaled_matrix, columns=self.selected_features)
+        n = len(features_list)
+        results: list[dict | None] = [None] * n
+
+        # Cache Tier-1 probs for the full batch (needed again for Tier-3 votes).
+        all_lgb_probs = self.models["lightgbm"].predict_proba(scaled_df)
+        lgb_idx = np.argmax(all_lgb_probs, axis=1)
+        lgb_conf = all_lgb_probs[np.arange(n), lgb_idx]
+        t1_mask = lgb_conf >= threshold
+
+        for i in np.where(t1_mask)[0]:
+            label = str(self.label_encoder.inverse_transform([int(lgb_idx[i])])[0])
+            conf = float(lgb_conf[i])
+            results[int(i)] = {
+                "predicted_label": label,
+                "confidence": conf,
+                "tier": 1,
+                "tier_name": "Tier 1: LightGBM (Fast Screener)",
+                "top_features": self._top_features_for_row(
+                    scaled_matrix[i], features_list[int(i)]
+                ),
+                "raw_features": features_list[int(i)],
+                "benign_averages": self.benign_averages,
+                "severity": compute_severity(label, conf),
+            }
+
+        pending = np.where(~t1_mask)[0]
+        if len(pending) == 0:
+            return results  # type: ignore[return-value]
+
+        rf_probs = self.models["random_forest"].predict_proba(scaled_df.iloc[pending])
+        rf_idx = np.argmax(rf_probs, axis=1)
+        rf_conf = rf_probs[np.arange(len(pending)), rf_idx]
+        t2_mask = rf_conf >= threshold
+
+        for local_i in np.where(t2_mask)[0]:
+            i = int(pending[local_i])
+            label = str(self.label_encoder.inverse_transform([int(rf_idx[local_i])])[0])
+            conf = float(rf_conf[local_i])
+            results[i] = {
+                "predicted_label": label,
+                "confidence": conf,
+                "tier": 2,
+                "tier_name": "Tier 2: Random Forest (Explainable Validator)",
+                "top_features": self._top_features_for_row(
+                    scaled_matrix[i], features_list[i]
+                ),
+                "raw_features": features_list[i],
+                "benign_averages": self.benign_averages,
+                "severity": compute_severity(label, conf),
+            }
+
+        escalate_local = np.where(~t2_mask)[0]
+        if len(escalate_local) == 0:
+            return results  # type: ignore[return-value]
+
+        escalate = pending[escalate_local]
+        xgb_probs = self.models["xgboost"].predict_proba(scaled_df.iloc[escalate])
+        w_lgb = self.weights.get("lightgbm", 0.2)
+        w_rf = self.weights.get("random_forest", 0.3)
+        w_xgb = self.weights.get("xgboost", 0.5)
+        weighted = (
+            (w_lgb * all_lgb_probs[escalate])
+            + (w_rf * rf_probs[escalate_local])
+            + (w_xgb * xgb_probs)
+        )
+        final_idx = np.argmax(weighted, axis=1)
+        final_conf = weighted[np.arange(len(escalate)), final_idx]
+
+        for local_i, i in enumerate(escalate):
+            gi = int(i)
+            label = str(self.label_encoder.inverse_transform([int(final_idx[local_i])])[0])
+            conf = float(final_conf[local_i])
+            results[gi] = {
+                "predicted_label": label,
+                "confidence": conf,
+                "tier": 3,
+                "tier_name": "Tier 3: XGBoost (Weighted Cascade Vote)",
+                "top_features": self._top_features_for_row(
+                    scaled_matrix[gi], features_list[gi]
+                ),
+                "raw_features": features_list[gi],
+                "benign_averages": self.benign_averages,
+                "severity": compute_severity(label, conf),
+            }
+
+        for i, item in enumerate(results):
+            if item is None:
+                results[i] = self.detect(features_list[i], threshold=threshold)
+        return results  # type: ignore[return-value]
+
 
 # Singletons to cache loaded assets in memory for backward compatibility
 _detector_instance = None

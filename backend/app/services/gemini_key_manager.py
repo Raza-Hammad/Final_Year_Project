@@ -10,7 +10,7 @@ a rate limit or quota exhaustion, this manager automatically rotates across mult
 
 KEY FUNCTIONALITIES:
 --------------------
-1. `GeminiKeyManager.__init__()`: Loads list of comma-separated Gemini API keys from settings (`.env`).
+1. `GeminiKeyManager.__init__()`: Loads list of comma-separated Gemini API keys from settings (`.env` or legacy `env`).
 2. `get_current_key()`: Thread-safe method to return the active, non-exhausted API key.
 3. `mark_exhausted()`: Temporarily blacklists a key if Gemini returns a 429 Rate Limit/Quota error and switches to the next key.
 4. `rotate()`: Rotates key usage sequentially to balance request volume across keys.
@@ -38,7 +38,8 @@ class GeminiKeyManager:
         if not self.keys:
             logger.warning(
                 "No Gemini API keys found in env variable 'GEMINI_API_KEYS'. "
-                "AI Assistant will run in rule-based/offline mode only until backend/.env is configured."
+                "AI Assistant will run in rule-based/offline mode only until "
+                "backend/.env (or legacy backend/env) is configured."
             )
         else:
             logger.info(f"Loaded {len(self.keys)} Gemini API keys")

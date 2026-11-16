@@ -10,7 +10,7 @@
  * 
  * KEY FUNCTIONALITIES:
  * --------------------
- * 1. `decodeJWT()`: Client-side helper function parsing JWT base64 payloads to extract `username` and `role`.
+ * 1. `decodeJWT()`: Client-side helper parsing JWT base64 payloads to extract `username` and `role`.
  * 2. `AuthProvider`: React Context Wrapper managing `token` and `user` state across all components.
  * 3. `login()`: Persists JWT token to browser `localStorage` and configures default HTTP headers.
  * 4. `logout()`: Revokes JWT server-side, clears local storage, and resets auth state.
@@ -37,13 +37,22 @@ interface AuthContextType {
   login: (token: string) => void;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  /** True after the initial localStorage / OAuth-hash restore attempt finishes. */
+  authReady: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Returns true when a JWT string is present, decodable, and not past `exp`. */
+export function isStoredTokenValid(token: string | null | undefined): boolean {
+  if (!token) return false;
+  return decodeJWT(token) !== null;
+}
+
 function decodeJWT(token: string): UserProfile | null {
   try {
     const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)
@@ -52,6 +61,11 @@ function decodeJWT(token: string): UserProfile | null {
         .join('')
     );
     const payload = JSON.parse(jsonPayload);
+    // Reject expired tokens so a closed browser does not leave a zombie session
+    // after ACCESS_TOKEN_EXPIRE_DAYS elapses.
+    if (typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now()) {
+      return null;
+    }
     return {
       username: payload.sub || '',
       role: payload.role || 'analyst',
@@ -65,32 +79,57 @@ function decodeJWT(token: string): UserProfile | null {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-  // Check localStorage on mount
+  const applyToken = (jwtToken: string) => {
+    const decoded = decodeJWT(jwtToken);
+    if (!decoded) {
+      return false;
+    }
+    setToken(jwtToken);
+    setUser(decoded);
+    localStorage.setItem('token', jwtToken);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${jwtToken}`;
+    return true;
+  };
+
+  const clearLocalSession = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    delete axios.defaults.headers.common['Authorization'];
+  };
+
+  // Check localStorage + Google redirect hash (#access_token=) on mount
   useEffect(() => {
+    const hash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash);
+      const hashToken = params.get('access_token');
+      if (hashToken) {
+        if (applyToken(hashToken)) {
+          // Strip token from the URL so it is not left in history.
+          const clean = `${window.location.pathname}${window.location.search}`;
+          window.history.replaceState(null, '', clean);
+          setAuthReady(true);
+          return;
+        }
+      }
+    }
+
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
-      const decoded = decodeJWT(savedToken);
-      if (decoded) {
-        setToken(savedToken);
-        setUser(decoded);
-        // Pre-configure axios global header just in case
-        axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
-      } else {
-        // Clear corrupt token
+      if (!applyToken(savedToken)) {
         localStorage.removeItem('token');
       }
     }
+    setAuthReady(true);
   }, []);
 
   const login = (jwtToken: string) => {
-    const decoded = decodeJWT(jwtToken);
-    if (decoded) {
-      setToken(jwtToken);
-      setUser(decoded);
-      localStorage.setItem('token', jwtToken);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${jwtToken}`;
-    }
+    applyToken(jwtToken);
   };
 
   const logout = async () => {
@@ -102,10 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.warn('Server-side logout revocation failed:', error);
     }
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
+    clearLocalSession();
   };
 
   return (
@@ -116,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         isAuthenticated: !!token,
+        authReady,
       }}
     >
       {children}

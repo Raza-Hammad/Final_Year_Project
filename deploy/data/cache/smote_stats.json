@@ -1,0 +1,36 @@
+{
+  "before_smote": {
+    "BENIGN": 1817055,
+    "Bot": 1565,
+    "DDoS": 102420,
+    "DoS GoldenEye": 8234,
+    "DoS Hulk": 184099,
+    "DoS Slowhttptest": 4399,
+    "DoS slowloris": 4637,
+    "FTP-Patator": 6348,
+    "Heartbleed": 9,
+    "Infiltration": 29,
+    "PortScan": 127043,
+    "SSH-Patator": 4717,
+    "Web Attack - Brute Force": 1206,
+    "Web Attack - Sql Injection": 17,
+    "Web Attack - XSS": 522
+  },
+  "after_smote": {
+    "BENIGN": 1817055,
+    "Bot": 20000,
+    "DDoS": 102420,
+    "DoS GoldenEye": 20000,
+    "DoS Hulk": 184099,
+    "DoS Slowhttptest": 20000,
+    "DoS slowloris": 20000,
+    "FTP-Patator": 20000,
+    "Heartbleed": 20000,
+    "Infiltration": 20000,
+    "PortScan": 127043,
+    "SSH-Patator": 20000,
+    "Web Attack - Brute Force": 20000,
+    "Web Attack - Sql Injection": 20000,
+    "Web Attack - XSS": 20000
+  }
+}

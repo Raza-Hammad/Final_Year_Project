@@ -3,36 +3,32 @@
      "Signal Room" design system — light, restrained, one accent.
      ============================================================ */
 
-  /* Surfaces */
-  --sr-bg-page: #FAFAFA;
-  --sr-bg-surface: #FFFFFF;
-  --sr-bg-surface-raised: #F5F6F7;
+  /* Surfaces — warm ink-paper, not sterile SaaS white */
+  --sr-bg-page: #F3F1ED;
+  --sr-bg-surface: #FBFAF8;
+  --sr-bg-surface-raised: #EDEAE4;
 
   /* Borders */
-  --sr-border-hairline: rgba(11, 11, 11, 0.08);
-  --sr-border-hover: rgba(11, 11, 11, 0.16);
+  --sr-border-hairline: rgba(28, 24, 20, 0.09);
+  --sr-border-hover: rgba(28, 24, 20, 0.16);
 
   /* Text */
-  --sr-text-primary: #0B0B0B;
-  --sr-text-secondary: #5B6472;
-  --sr-text-muted: #8A8F98;
+  --sr-text-primary: #14121A;
+  --sr-text-secondary: #5A5566;
+  --sr-text-muted: #8A8494;
 
-  /* Accent — deep indigo + warm copper duotone. Deliberately not "SaaS blue":
-     the brand identity (buttons, links, active nav, logomark, focus rings) lives
-     here. Tier/model categorical colors (--sr-cat-*) are a separate, validated
-     system below and are untouched by this pair. */
-  --sr-accent: #4C3F91;
-  --sr-accent-hover: #3A2F73;
-  --sr-accent-soft: rgba(76, 63, 145, 0.08);
+  /* Accent — indigo filament + forge copper. Not purple-glow SaaS, not terracotta cream. */
+  --sr-accent: #3D348B;
+  --sr-accent-hover: #2F2870;
+  --sr-accent-soft: rgba(61, 52, 139, 0.09);
 
-  /* Secondary accent — warm copper, the other half of the duotone. Used for
-     gradient depth/illustrations and anywhere a second brand hue is needed. */
-  --sr-accent-2: #C97A3F;
-  --sr-accent-2-soft: rgba(201, 122, 63, 0.08);
+  /* Secondary accent — forge copper */
+  --sr-accent-2: #B86B32;
+  --sr-accent-2-soft: rgba(184, 107, 50, 0.09);
 
-  /* Glass surface — frosted panel variant used over the network background */
-  --sr-glass-bg: rgba(255, 255, 255, 0.72);
-  --sr-glass-border: rgba(255, 255, 255, 0.6);
+  /* Glass surface — frosted panel over atmospheric backgrounds */
+  --sr-glass-bg: rgba(251, 250, 248, 0.78);
+  --sr-glass-border: rgba(255, 255, 255, 0.55);
 
   /* Nav identity — one hue per sidebar panel, distinct from severity/tier palettes
      so they never collide in meaning. Live/Insights reuse the primary accents;
@@ -43,6 +39,11 @@
   --sr-nav-history-soft: rgba(184, 134, 46, 0.1);
   --sr-nav-ai: #C94F87;
   --sr-nav-ai-soft: rgba(201, 79, 135, 0.1);
+  --sr-nav-lab: #6F8F2E;
+  --sr-nav-lab-soft: rgba(111, 143, 46, 0.12);
+  /* Reviews — sky-cyan; keeps clear of severity + tier palettes */
+  --sr-nav-reviews: #18A5C4;
+  --sr-nav-reviews-soft: rgba(24, 165, 196, 0.12);
 
   /* Status palette — fixed, always paired with an icon/dot + label */
   --sr-sev-critical: #D03B3B;
@@ -66,12 +67,9 @@
   --sr-shadow-sm: 0 1px 2px rgba(16, 24, 32, 0.04);
   --sr-shadow-md: 0 4px 12px rgba(16, 24, 32, 0.06);
 
-  /* Colored ambient glow — used sparingly on hero cards/primary CTAs (hover or
-     "this matters" moments) instead of the neutral shadow above. This is what
-     keeps the light theme from reading as flat/generic: a soft light source in
-     the brand hue rather than plain gray elevation. */
-  --sr-shadow-glow: 0 20px 50px -16px rgba(76, 63, 145, 0.35), 0 4px 14px -4px rgba(76, 63, 145, 0.18);
-  --sr-shadow-glow-2: 0 20px 50px -16px rgba(201, 122, 63, 0.32), 0 4px 14px -4px rgba(201, 122, 63, 0.16);
+  /* Colored ambient glow — sparingly on hero CTAs / "this matters" moments */
+  --sr-shadow-glow: 0 22px 56px -18px rgba(61, 52, 139, 0.38), 0 4px 16px -4px rgba(61, 52, 139, 0.16);
+  --sr-shadow-glow-2: 0 22px 56px -18px rgba(184, 107, 50, 0.34), 0 4px 16px -4px rgba(184, 107, 50, 0.14);
 
   /* Brand gradient — reused for gradient text, aurora washes, and any surface
      that wants the duotone as a single unit rather than two separate colors. */
@@ -81,12 +79,32 @@
   --sr-radius-sm: 8px;
   --sr-radius-md: 14px;
 
-  /* Typography — Inter for all body/UI text. Space Grotesk is used sparingly and
-     deliberately: hero numbers, the Intro title, and panel headlines only. It's
-     what gives the product a typographic signature instead of reading as a
-     default system-font template. */
+  /* Typography — Inter (UI) · Space Grotesk (display/headlines) · Syne (brand) */
   --sr-font-sans: 'Inter', "Segoe UI", system-ui, sans-serif;
   --sr-font-display: 'Space Grotesk', 'Inter', "Segoe UI", system-ui, sans-serif;
+  --sr-font-brand: 'Syne', 'Space Grotesk', 'Inter', system-ui, sans-serif;
+
+  /* ============================================================
+     Living Lattice (Phase 3 foundation) — motion + spatial tokens.
+     Full 3D Intro / Live map / cascade stage arrive in Phase 4.
+     Keep indigo/copper; do not introduce purple-glow clichés here.
+     ============================================================ */
+  --ll-motion-fast: 160ms;
+  --ll-motion-base: 280ms;
+  --ll-motion-slow: 480ms;
+  --ll-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ll-ease-soft: cubic-bezier(0.33, 1, 0.68, 1);
+
+  /* Lattice mesh / node accents — brand-aligned, restrained */
+  --ll-node: var(--sr-accent);
+  --ll-node-soft: var(--sr-accent-soft);
+  --ll-edge: color-mix(in srgb, var(--sr-accent) 28%, transparent);
+  --ll-edge-hot: color-mix(in srgb, var(--sr-accent-2) 45%, transparent);
+  --ll-depth-fog: color-mix(in srgb, var(--sr-bg-page) 72%, transparent);
+
+  /* Sidebar collapse width targets for AppShell */
+  --ll-sidebar-expanded: 16rem; /* 256px */
+  --ll-sidebar-collapsed: 4.5rem;
 }
 
 [data-theme='dark'] {
@@ -102,12 +120,12 @@
   --sr-text-secondary: #94A3B8;
   --sr-text-muted: #64748B;
 
-  --sr-accent: #8578D8;
-  --sr-accent-hover: #A69AE8;
-  --sr-accent-soft: rgba(133, 120, 216, 0.18);
+  --sr-accent: #8B7FE0;
+  --sr-accent-hover: #A89AEF;
+  --sr-accent-soft: rgba(139, 127, 224, 0.18);
 
-  --sr-accent-2: #E0955A;
-  --sr-accent-2-soft: rgba(224, 149, 90, 0.18);
+  --sr-accent-2: #E09A5C;
+  --sr-accent-2-soft: rgba(224, 154, 92, 0.18);
 
   --sr-glass-bg: rgba(18, 24, 36, 0.85);
   --sr-glass-border: rgba(255, 255, 255, 0.1);
@@ -118,6 +136,10 @@
   --sr-nav-history-soft: rgba(217, 165, 68, 0.15);
   --sr-nav-ai: #E879A8;
   --sr-nav-ai-soft: rgba(232, 121, 168, 0.15);
+  --sr-nav-lab: #A3CF52;
+  --sr-nav-lab-soft: rgba(163, 207, 82, 0.16);
+  --sr-nav-reviews: #3CC4E2;
+  --sr-nav-reviews-soft: rgba(60, 196, 226, 0.16);
 
   --sr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sr-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);

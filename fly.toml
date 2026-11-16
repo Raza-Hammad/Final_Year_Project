@@ -1,0 +1,46 @@
+# ======================================================================================
+#  !!  NOT FREE  !!  OPTIONAL PAID ALWAYS-ON PATH (Fly.io needs a card, ~US$10-12/month).
+#  The FREE primary deploy is Render: see render.yaml + docs/GO_LIVE.md + docs/DEPLOY.md.
+#  Only use this file if you knowingly choose paid hosting (docs/DEPLOY.md, Appendix B).
+# ======================================================================================
+# Fly.io config for Cascadyx.
+# EDIT the three lines marked CHANGE-ME before `fly deploy`.
+
+app = "cascadyx"                  # CHANGE-ME: must be globally unique (e.g. cascadyx-fyp)
+primary_region = "sin"            # CHANGE-ME: nearest region (sin = Singapore, bom = Mumbai, fra = Frankfurt)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PUBLIC_MODE = "1"
+  PUBLIC_BASE_URL = "https://cascadyx.app"   # CHANGE-ME: the exact domain you registered (https, no trailing slash)
+  DATABASE_URL = "sqlite:////data/app.db"
+  ACCESS_TOKEN_EXPIRE_DAYS = "14"            # public deploy: shorter than the 365-day local default
+  AI_QUERY_LIMIT = "10"
+  LAB_SENSOR_WATCH = "0"
+
+# SQLite lives on a Fly volume so accounts/alerts survive redeploys.
+# Create it ONCE:  fly volumes create cascadyx_data --size 1 --region <primary_region>
+[mounts]
+  source = "cascadyx_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"      # never sleep: WebSocket + in-memory simulator state
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "60s"          # models + npz take a while to load on first boot
+    interval = "30s"
+    timeout = "10s"
+    method = "GET"
+    path = "/api/health"
+
+# One machine only (SQLite + in-process simulator cannot be horizontally scaled).
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

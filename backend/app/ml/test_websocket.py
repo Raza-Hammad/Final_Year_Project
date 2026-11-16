@@ -27,6 +27,39 @@ def test_websocket_rejects_missing_token(client):
         assert exc.code == 1008
 
 
+def test_websocket_rejects_invalid_token(client):
+    from starlette.websockets import WebSocketDisconnect
+
+    try:
+        with client.websocket_connect("/ws/live?token=not-a-valid-jwt"):
+            pass
+        assert False, "Expected the connection to be rejected with an invalid token"
+    except WebSocketDisconnect as exc:
+        assert exc.code == 1008
+
+
+def test_websocket_rejects_revoked_token(client, auth_headers):
+    """Logout revokes jti in-process; WS auth must honor the same revoke set."""
+    from starlette.websockets import WebSocketDisconnect
+
+    token = auth_headers["Authorization"].split(" ", 1)[1]
+    # Use a dedicated login so we do not revoke the shared session fixture token.
+    username, password = "ws_revoke_user", "SecurePassword!321"
+    client.post("/api/auth/register", json={"username": username, "password": password})
+    login = client.post("/api/auth/login", data={"username": username, "password": password})
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.post("/api/auth/logout", headers=headers).status_code == 200
+
+    try:
+        with client.websocket_connect(f"/ws/live?token={token}"):
+            pass
+        assert False, "Expected revoked token to be rejected on WS connect"
+    except WebSocketDisconnect as exc:
+        assert exc.code == 1008
+
+
 def test_websocket_receives_broadcast_detection(client, auth_headers):
     token = auth_headers["Authorization"].split(" ", 1)[1]
     with client.websocket_connect(f"/ws/live?token={token}") as websocket:
@@ -42,3 +75,25 @@ def test_websocket_receives_broadcast_detection(client, auth_headers):
                 assert "top_features" in event["data"]
                 return
         assert False, "Did not receive a 'detection' broadcast event in time"
+
+
+def test_use_live_socket_reconnect_contract_exists():
+    """Frontend reconnect contract (Phase 3/6): hook exports reconnect + backoff knobs.
+
+    No vitest harness in this repo — assert the TypeScript surface still documents
+    the reconnect API so Living Lattice can recover after drops.
+    """
+    from pathlib import Path
+
+    hook = Path(__file__).resolve().parents[3] / "frontend" / "src" / "hooks" / "useLiveSocket.ts"
+    assert hook.is_file(), f"Missing useLiveSocket hook at {hook}"
+    text = hook.read_text(encoding="utf-8")
+    for needle in (
+        "reconnectAttempt",
+        "reconnect:",
+        "baseDelayMs",
+        "maxDelayMs",
+        "scheduleReconnect",
+        "exponential",
+    ):
+        assert needle in text, f"useLiveSocket missing reconnect contract piece: {needle}"

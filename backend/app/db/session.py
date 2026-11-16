@@ -35,7 +35,9 @@ engine = create_engine(
 def init_db():
     """Initializes tables in the SQLite database based on SQLModel metadata."""
     # Importing models here ensures they are registered with SQLModel metadata before creation
-    from app.db.models import User, Alert, Conversation, ChatMessage
+    from app.db.models import (  # noqa: F401
+        User, Alert, Conversation, ChatMessage, AuditLog, Review, ReviewHelpful,
+    )
     SQLModel.metadata.create_all(engine)
 
     # create_all() only creates tables that don't exist yet -- it won't retrofit indexes
@@ -53,6 +55,28 @@ def init_db():
         if existing_cols and "pinned" not in existing_cols:
             conn.execute(text("ALTER TABLE conversation ADD COLUMN pinned BOOLEAN DEFAULT 0"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_conversation_pinned ON conversation (pinned)"))
+
+        # Lifetime AI (LLM) query counter — retrofit for databases created before Phase student-access.
+        user_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(user)")).fetchall()}
+        if user_cols and "ai_queries_used" not in user_cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN ai_queries_used INTEGER DEFAULT 0"))
+
+        # Google Sign-In columns — retrofit for databases created before OAuth wiring.
+        if user_cols and "email" not in user_cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN email TEXT"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_email ON user (email)"))
+        if user_cols and "google_sub" not in user_cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN google_sub TEXT"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_user_google_sub ON user (google_sub)"))
+
+        # AuditLog indexes (create_all makes the table; indexes may need retrofit).
+        for column in ("timestamp", "username", "action", "user_id"):
+            conn.execute(
+                text(f"CREATE INDEX IF NOT EXISTS ix_auditlog_{column} ON auditlog ({column})")
+            )
+
+        for column in ("status", "created_at"):
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_review_{column} ON review ({column})"))
 
         conn.commit()
 

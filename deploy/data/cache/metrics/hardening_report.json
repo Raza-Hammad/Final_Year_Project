@@ -1,0 +1,147 @@
+{
+  "dataset": "CIC-IDS2017",
+  "search_algorithm": "sklearn.model_selection.RandomizedSearchCV",
+  "scoring": "f1_macro",
+  "search_samples": 40000,
+  "final_train_samples": 100000,
+  "n_iter_per_model": 4,
+  "cv_folds": 2,
+  "cv_strategy": "StratifiedShuffleSplit(test_size=0.25)",
+  "models": {
+    "lightgbm": {
+      "display_name": "LightGBM",
+      "best_params": {
+        "reg_lambda": 2.0,
+        "num_leaves": 31,
+        "n_estimators": 100,
+        "min_child_samples": 50,
+        "learning_rate": 0.1
+      },
+      "search_cv_macro_f1": 0.9373796053587007,
+      "search_seconds": 30.5826153755188,
+      "param_distributions": {
+        "n_estimators": [
+          100,
+          150,
+          200
+        ],
+        "num_leaves": [
+          15,
+          31
+        ],
+        "min_child_samples": [
+          20,
+          50,
+          100
+        ],
+        "reg_lambda": [
+          0.5,
+          1.0,
+          2.0
+        ],
+        "learning_rate": [
+          0.05,
+          0.1
+        ]
+      },
+      "test_accuracy": 0.9970101277281922,
+      "test_macro_f1": 0.8054254407555727,
+      "web_attack_f1": {
+        "Web Attack - Brute Force": 0.4573547589616811,
+        "Web Attack - Sql Injection": 0.26666666666666666,
+        "Web Attack - XSS": 0.21298701298701297
+      }
+    },
+    "random_forest": {
+      "display_name": "Random Forest",
+      "best_params": {
+        "n_estimators": 150,
+        "min_samples_leaf": 4,
+        "max_features": "sqrt",
+        "max_depth": null
+      },
+      "search_cv_macro_f1": 0.9329263996984309,
+      "search_seconds": 9.416802644729614,
+      "param_distributions": {
+        "n_estimators": [
+          50,
+          100,
+          150
+        ],
+        "max_depth": [
+          10,
+          12,
+          16,
+          null
+        ],
+        "min_samples_leaf": [
+          1,
+          2,
+          4
+        ],
+        "max_features": [
+          "sqrt",
+          0.5
+        ]
+      },
+      "test_accuracy": 0.9956875822170672,
+      "test_macro_f1": 0.7820486152988038,
+      "web_attack_f1": {
+        "Web Attack - Brute Force": 0.38748495788206977,
+        "Web Attack - Sql Injection": 0.3333333333333333,
+        "Web Attack - XSS": 0.1875
+      }
+    },
+    "xgboost": {
+      "display_name": "XGBoost",
+      "best_params": {
+        "subsample": 0.8,
+        "n_estimators": 100,
+        "max_depth": 6,
+        "learning_rate": 0.1,
+        "colsample_bytree": 1.0
+      },
+      "search_cv_macro_f1": 0.9415305922158428,
+      "search_seconds": 38.736276626586914,
+      "param_distributions": {
+        "n_estimators": [
+          80,
+          100,
+          150
+        ],
+        "max_depth": [
+          4,
+          6,
+          8
+        ],
+        "learning_rate": [
+          0.05,
+          0.1
+        ],
+        "subsample": [
+          0.8,
+          1.0
+        ],
+        "colsample_bytree": [
+          0.8,
+          1.0
+        ]
+      },
+      "test_accuracy": 0.9963983620238482,
+      "test_macro_f1": 0.7684504904694707,
+      "web_attack_f1": {
+        "Web Attack - Brute Force": 0.35271317829457366,
+        "Web Attack - Sql Injection": 0.36363636363636365,
+        "Web Attack - XSS": 0.21212121212121213
+      }
+    }
+  },
+  "web_attack_caveat": "Web Attack classes (Brute Force / XSS / Sql Injection) remain weak on CIC-IDS2017 due to scarce labelled samples. Hyperparameter search may shift F1 slightly but does not create a reliable web-attack detector. Scenario-level accuracy for pure web-attack traffic can stay near ~60%. Document this honestly in viva materials.",
+  "promoted_to_live": false,
+  "timestamp_unix": 1794602191.6789844,
+  "recommendation": "keep_baseline",
+  "recommendation_reason": "Hardened search/retrain (often on a reduced sample budget) did not beat the mid-eval models trained on the full capped-SMOTE set. Live cascade stays on baseline. Hardened artifacts remain for Insights comparison. Re-run with larger --final-samples if seeking promotion.",
+  "production_models": "mid_baseline",
+  "hardened_status": "experimental_non_production",
+  "experimental_note": "models/hardened/*.joblib are EXPERIMENTAL / NON-PRODUCTION. CascadeDetector loads only models/*.joblib (mid-eval baseline). Reduced RandomizedSearchCV runs that regress macro-F1 must not replace production."
+}

@@ -1,0 +1,125 @@
+{
+  "scenarios": [
+    {
+      "id": "ddos_portscan_mix",
+      "name": "DDoS and port-scan wave",
+      "category": "Volumetric",
+      "blurb": "A burst of connection-flood traffic followed by a sweep across many ports.",
+      "quick_pcap": "lab/captures/flood_then_sweep.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [
+        "DDoS",
+        "PortScan"
+      ],
+      "validated": true,
+      "duration_s": 90,
+      "max_packets": 2000,
+      "live_commands": [
+        "sudo hping3 -S --flood -p 80 <VICTIM_IP>",
+        "sudo nmap -sS -p 1-2000 <VICTIM_IP>"
+      ]
+    },
+    {
+      "id": "ddos_flood",
+      "name": "DDoS connection flood",
+      "category": "Volumetric",
+      "blurb": "Dozens of clients pile onto the web server and hold their connections open.",
+      "quick_pcap": "lab/captures/ddos_flood.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [
+        "DDoS"
+      ],
+      "validated": true,
+      "duration_s": 60,
+      "max_packets": 1250,
+      "live_commands": [
+        "sudo hping3 -S --flood -p 80 <VICTIM_IP>"
+      ]
+    },
+    {
+      "id": "port_scan",
+      "name": "Port scan sweep",
+      "category": "Reconnaissance",
+      "blurb": "A fast half-open sweep across the low port range on the Victim VM.",
+      "quick_pcap": "lab/captures/port_sweep.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [
+        "PortScan"
+      ],
+      "validated": true,
+      "duration_s": 75,
+      "max_packets": 1000,
+      "live_commands": [
+        "sudo nmap -sS -p 1-1024 <VICTIM_IP>"
+      ]
+    },
+    {
+      "id": "brute_force",
+      "name": "Credential brute force",
+      "category": "Access",
+      "blurb": "Rapid repeated login attempts against the web login, FTP and SSH.",
+      "quick_pcap": "lab/captures/credential_guessing.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [
+        "Web Attack - Brute Force"
+      ],
+      "validated": true,
+      "duration_s": 60,
+      "max_packets": 1500,
+      "live_commands": [
+        "hydra -l victim -P wordlist.txt ssh://<VICTIM_IP> -t 4"
+      ]
+    },
+    {
+      "id": "web_attack",
+      "name": "Web application probing",
+      "category": "Application",
+      "blurb": "Login guessing and script-injection style requests against a web app.",
+      "quick_pcap": "lab/captures/web_probe.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [
+        "Web Attack - XSS",
+        "Web Attack - Brute Force"
+      ],
+      "validated": true,
+      "duration_s": 60,
+      "max_packets": 1000,
+      "live_commands": [
+        "nikto -h http://<VICTIM_IP>"
+      ]
+    },
+    {
+      "id": "botnet_beacon",
+      "name": "Botnet beaconing",
+      "category": "Command & control",
+      "blurb": "Periodic low-volume check-ins from a compromised host, with the odd tasking pull.",
+      "quick_pcap": "lab/captures/controller_checkin.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [
+        "Bot"
+      ],
+      "validated": false,
+      "duration_s": 90,
+      "max_packets": 1250,
+      "live_commands": [
+        "while true; do curl -s http://<VICTIM_IP>/beacon; sleep 5; done"
+      ]
+    },
+    {
+      "id": "vbox_session",
+      "name": "Isolated VM session",
+      "category": "Mixed",
+      "blurb": "Everyday traffic between the lab VMs as the Sensor saw it.",
+      "quick_pcap": "captures/vbox_capture.pcap",
+      "provenance": "Isolated lab network \u00b7 sensor view",
+      "expected_labels": [],
+      "validated": false,
+      "duration_s": 45,
+      "max_packets": 500,
+      "live_commands": [
+        "ping -c 20 <VICTIM_IP>",
+        "curl -s http://<VICTIM_IP>/ > /dev/null"
+      ]
+    }
+  ]
+}

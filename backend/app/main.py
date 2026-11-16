@@ -20,51 +20,77 @@ KEY FUNCTIONALITIES:
    - Logs users in and returns signed JWT tokens.
 3. Prediction Endpoint (`/api/predict`):
    - Receives network feature vectors, runs 3-Tier ML Cascade classification, persists alerts, and broadcasts to WebSockets.
-4. Simulator Endpoints (`/api/simulate/start`, `/api/simulate/stop`, `/api/simulate/status`):
-   - Controls real-time threat scenario simulation.
+4. Simulator Endpoints (`/api/simulate/start`, `/api/simulate/stop`, `/api/simulate/status`,
+   `/api/simulate/replay/start`, `/api/simulate/replay/stop`):
+   - Controls CSV threat scenario simulation and isolated PCAP Live Replay.
 5. Alert Management Endpoints (`/api/alerts`, `/api/alerts/stats`, `/api/alerts/export`):
    - Fetches historical security alerts and exports PDF / CSV session reports.
 6. Model Metrics & SMOTE Stats (`/api/models/metrics`, `/api/data/smote-stats`):
    - Returns evaluation metrics and Before/After SMOTE oversampling class ratios to the UI.
 7. Sentinel AI Assistant Router (`/api/chat`, `/api/conversations`):
-   - Routes user SOC questions to offline Rule-Based logic or live Google Gemini AI with key rotation.
+   - Routes user SOC questions to Nebius AI Studio (OpenAI-compatible) or offline Rule-Based logic.
 
 LIBRARIES & TOOLS USED:
 -----------------------
 - `fastapi.FastAPI`, `Depends`, `HTTPException`: Core REST API framework and dependency injection.
 - `slowapi.Limiter`: Rate-limiting library protecting endpoints against brute-force flooding.
 - `reportlab.platypus`: Generates dynamic, professional PDF security reports for alert exports.
-- `google.generativeai` (Gemini): Google's Generative AI SDK powering the SOC Chatbot.
+- `openai` (Nebius): OpenAI-compatible client for Nebius Token Factory chat completions.
 - `sqlmodel.Session`, `select`: Database ORM query builder.
 ===============================================================================
 """
 
 import json
 import logging
+import os
 import asyncio
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from app.static_ui import mount_frontend
 from fastapi.security import OAuth2PasswordRequestForm
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlmodel import Session, select, func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from io import BytesIO
+import tempfile
+import shutil
+import secrets
+from urllib.parse import quote
 
-from app.config import settings
+from app.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+
+from app.config import settings, validate_public_mode
 from app.db import (
-    engine, init_db, get_session, User, Alert, UserCreate, UserResponse, Token, PredictionRequest,
+    engine, init_db, get_session, User, Alert, AuditLog, UserCreate, UserResponse, Token, PredictionRequest,
+    GoogleAuthRequest,
     Conversation, ChatMessage, ConversationSummary, ChatMessageResponse, ConversationDetail, ConversationUpdate
 )
 from app.auth import (
     get_password_hash, verify_password, create_access_token, get_current_user,
-    decode_token, revoke_token, oauth2_scheme, get_user_by_username
+    decode_token, revoke_token, oauth2_scheme, get_user_by_username, require_admin,
 )
+from app.auth.google_oauth import (
+    GIS_POPUP_REDIRECT_URI,
+    build_google_authorize_url,
+    exchange_google_auth_code,
+    get_or_create_google_user,
+    google_client_id_looks_valid,
+    google_oauth_configured,
+    google_required_origins,
+    google_redirect_configured,
+    issue_access_token_for_user,
+    sanitize_frontend_next,
+    verify_google_id_token,
+)
+from app.services.audit import write_audit_log
 from jose import JWTError
 from app.ml.cascade import CascadeDetector, get_detector
 from app.ml.severity import compute_severity
@@ -90,6 +116,24 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[int] = None
     incognito: bool = False
 
+class PcapAnalyzeBody(BaseModel):
+    """JSON body for server-side CIC PCAP analysis (path under data/raw)."""
+    pcap_path: str
+    max_packets: int = 500
+    persist_alerts: bool = True
+    broadcast: bool = True
+    source_scenario: str = "pcap"
+
+
+class ReplayStartRequest(BaseModel):
+    """JSON body for isolated PCAP Live Replay (path under data/raw)."""
+
+    pcap_path: str
+    max_packets: int = 500
+    rate: int = 5
+    duration_seconds: Optional[int] = None
+    source_scenario: str = "isolated_replay"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -111,6 +155,9 @@ async def send_heartbeat():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 0. Public deploys must have a strong JWT_SECRET + ADMIN_SEED_PASSWORD (no-op locally).
+    validate_public_mode()
+
     # 1. Initialize SQLite Database Tables (creates /data/cache/app.db)
     logger.info("Initializing database tables on startup...")
     init_db()
@@ -120,8 +167,9 @@ async def lifespan(app: FastAPI):
         statement = select(User).where(User.role == "admin")
         admin = session.exec(statement).first()
         if not admin:
-            # Seed default admin user password
-            admin_password = "Admin@652f0915!"
+            # Seed password: ADMIN_SEED_PASSWORD env var, else a random one-time value
+            # printed in the banner below (never a hard-coded default).
+            admin_password = os.getenv("ADMIN_SEED_PASSWORD", "").strip() or secrets.token_urlsafe(14)
             hashed_pwd = get_password_hash(admin_password)
             admin_user = User(
                 username="admin",
@@ -138,7 +186,11 @@ async def lifespan(app: FastAPI):
                 "\n" + "=" * 80 +
                 "\n  An administrative user has been successfully seeded in the database." +
                 f"\n  Username: admin" +
-                f"\n  Password: {admin_password}" +
+                (
+                    "\n  Password: (from ADMIN_SEED_PASSWORD env var — not logged)"
+                    if settings.PUBLIC_MODE
+                    else f"\n  Password: {admin_password}"
+                ) +
                 "\n  Role:     admin" +
                 "\n" + "=" * 80
             )
@@ -160,13 +212,20 @@ async def lifespan(app: FastAPI):
     # 5. Start background heartbeat task
     logger.info("Starting background WebSocket heartbeat loop...")
     heartbeat_task = asyncio.create_task(send_heartbeat())
+
+    # 6. Optional Live Lab sensor watcher (admins can also toggle it in the UI).
+    if os.getenv("LAB_SENSOR_WATCH", "").strip() == "1":
+        from app.services.lab import sensor_watcher
+        sensor_watcher.start()
     
     yield
     
     # Clean up background task on shutdown
     logger.info("Stopping simulator engine if active...")
     simulator_engine.stop()
-    
+    from app.services.lab import sensor_watcher
+    sensor_watcher.stop()
+
     logger.info("Stopping background WebSocket heartbeat task...")
     heartbeat_task.cancel()
     try:
@@ -175,26 +234,107 @@ async def lifespan(app: FastAPI):
         pass
     logger.info("Application shutting down.")
 
+# PUBLIC_MODE hides the interactive API docs from the open internet.
+_docs_kwargs: dict = (
+    {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    if settings.PUBLIC_MODE
+    else {}
+)
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Backend API for Cybersecurity Threat Simulator Powered by AI",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    **_docs_kwargs,
 )
 
-# Rate limiting — protects auth endpoints from brute-force/credential-stuffing attempts
-limiter = Limiter(key_func=get_remote_address)
+# Rate limiting — auth + sensitive admin/detection endpoints (Phase 6).
+# Limits are intentionally generous for local FYP demos / pytest; they still
+# blunt naive brute-force and accidental UI hammering.
+from app.rate_limit import limiter  # shared with routers
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Configure CORS specifically for Vite dev server and local script probes
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
 
+def _error_payload(
+    *,
+    status_code: int,
+    detail: object,
+    request: Optional[Request] = None,
+    error: str = "error",
+) -> dict:
+    """Uniform JSON error envelope used by exception handlers."""
+    request_id = None
+    if request is not None:
+        request_id = getattr(request.state, "request_id", None)
+    payload: dict = {"error": error, "detail": detail, "status_code": status_code}
+    if request_id:
+        payload["request_id"] = request_id
+    return payload
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return a consistent 422 body for malformed request payloads."""
+    logger.warning(
+        "validation_error path=%s detail=%s",
+        request.url.path,
+        exc.errors(),
+    )
+    # Prefer the newer Starlette alias when available; fall back for older pins.
+    unprocessable = getattr(
+        status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY
+    )
+    return JSONResponse(
+        status_code=unprocessable,
+        content=_error_payload(
+            status_code=unprocessable,
+            detail=jsonable_encoder(exc.errors(), custom_encoder={Exception: str}),
+            request=request,
+            error="validation_error",
+        ),
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Keep FastAPI HTTPException semantics but attach request_id when present."""
+    headers = dict(exc.headers) if exc.headers else None
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_payload(
+            status_code=exc.status_code,
+            detail=exc.detail,
+            request=request,
+            error="http_error",
+        ),
+        headers=headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all so unexpected failures never leak stack traces to clients."""
+    logger.exception("Unhandled error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=_error_payload(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error. Check server logs for details.",
+            request=request,
+            error="internal_error",
+        ),
+    )
+
+
+# CORS: local Vite dev server / script probes + PUBLIC_BASE_URL + CORS_ORIGINS (env).
+# In the recommended public deploy the SPA, API and WS share one origin, so CORS is
+# rarely exercised — but the public origin is allow-listed anyway.
+origins = settings.cors_allowed_origins()
+
+# Middleware order: last added runs first. Request logging wraps CORS so we still
+# observe CORS-preflight / actual request timing for API paths.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -202,19 +342,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/")
-def read_root():
-    return {
-        "message": f"Welcome to the {settings.PROJECT_NAME} API",
-        "docs_url": "/docs",
-        "health_check": "/api/health"
-    }
+app.add_middleware(RequestLoggingMiddleware)
+if settings.PUBLIC_MODE:
+    # Outermost: security headers land on every response (API, SPA, errors).
+    app.add_middleware(SecurityHeadersMiddleware)
 
 @app.get("/api/health")
 def health_check():
     """Health check endpoint to verify backend connectivity."""
     return {"status": "ok"}
+
+
+@app.get("/api/ready")
+def readiness_check(request: Request):
+    """Deployment smoke check: models loaded, UI bundle present, public-mode flag."""
+    from app.static_ui import frontend_dist_ready
+
+    detector_loaded = getattr(request.app.state, "detector", None) is not None
+    payload = {
+        "status": "ok" if detector_loaded else "degraded",
+        "detector_loaded": detector_loaded,
+        "ui_built": frontend_dist_ready(),
+        "public_mode": settings.PUBLIC_MODE,
+    }
+    if not detector_loaded:
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
+    return payload
 
 # --- AUTHENTICATION ROUTES ---
 
@@ -231,9 +384,14 @@ def register_user(request: Request, user_in: UserCreate, session: Session = Depe
             detail="Username already registered."
         )
         
-    # Create new user
+    # Create new user (students / self-register always land as analyst)
     hashed_pwd = get_password_hash(user_in.password)
-    new_user = User(username=user_in.username, hashed_password=hashed_pwd)
+    new_user = User(
+        username=user_in.username,
+        hashed_password=hashed_pwd,
+        role="analyst",
+        ai_queries_used=0,
+    )
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
@@ -245,7 +403,11 @@ def login_user(request: Request, form_data: OAuth2PasswordRequestForm = Depends(
     """Authenticates username/password and returns a JWT token containing sub + role claims."""
     statement = select(User).where(User.username == form_data.username)
     user = session.exec(statement).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if (
+        not user
+        or not user.hashed_password
+        or not verify_password(form_data.password, user.hashed_password)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -272,6 +434,149 @@ def logout_user(token: str = Depends(oauth2_scheme)):
         revoke_token(jti)
     return {"status": "logged_out"}
 
+
+@app.get("/api/auth/google/config")
+def google_auth_config():
+    """Public Google Sign-In config for the SPA (client id is public; secret is never returned)."""
+    client_id = settings.GOOGLE_CLIENT_ID or None
+    return {
+        "enabled": google_oauth_configured(),
+        "client_id": client_id,
+        "redirect_enabled": google_redirect_configured(),
+        # Diagnostics only (all public values; never the secret).
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI or None,
+        "client_id_looks_valid": google_client_id_looks_valid(client_id),
+        "required_origins": google_required_origins(),
+    }
+
+
+@app.post("/api/auth/google", response_model=Token)
+@limiter.limit("10/minute")
+def google_auth_token(
+    request: Request,
+    body: GoogleAuthRequest,
+    session: Session = Depends(get_session),
+):
+    """SPA Google Sign-In: verify GIS ID token or exchange a popup auth code, then issue JWT.
+
+    Preferred path for Vite (:5173) and production same-origin (:8000): the frontend
+    obtains a Google credential via Identity Services and posts it here. Client secret
+    stays on the server (used only for authorization-code exchange).
+    """
+    if not google_oauth_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Sign-In is not configured on this server.",
+        )
+
+    claims = None
+    try:
+        if body.id_token:
+            claims = verify_google_id_token(body.id_token.strip())
+        elif body.code:
+            # GIS ``initCodeClient`` popup uses redirect_uri=postmessage.
+            claims = exchange_google_auth_code(
+                body.code.strip(),
+                redirect_uri=GIS_POPUP_REDIRECT_URI,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide id_token or code.",
+            )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+
+    user = get_or_create_google_user(session, claims)
+    return {"access_token": issue_access_token_for_user(user), "token_type": "bearer"}
+
+
+@app.get("/api/auth/google/login")
+@limiter.limit("10/minute")
+def google_auth_login(request: Request, next: Optional[str] = None):
+    """Start Google OAuth redirect flow; browser returns via ``/api/auth/google/callback``."""
+    if not google_redirect_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google redirect Sign-In is not configured on this server.",
+        )
+    state = secrets.token_urlsafe(24)
+    safe_next = sanitize_frontend_next(next)
+    # Short-lived cookie bridges CSRF state + post-login destination across the Google hop.
+    response = RedirectResponse(url=build_google_authorize_url(state), status_code=302)
+    response.set_cookie(
+        key="g_oauth_state",
+        value=state,
+        httponly=True,
+        samesite="lax",
+        max_age=600,
+        path="/api/auth/google",
+    )
+    response.set_cookie(
+        key="g_oauth_next",
+        value=safe_next,
+        httponly=True,
+        samesite="lax",
+        max_age=600,
+        path="/api/auth/google",
+    )
+    return response
+
+
+@app.get("/api/auth/google/callback")
+@limiter.limit("10/minute")
+def google_auth_callback(
+    request: Request,
+    session: Session = Depends(get_session),
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    """OAuth redirect callback: exchange code, upsert user, send JWT to SPA via URL hash."""
+    cookie_state = request.cookies.get("g_oauth_state")
+    next_url = sanitize_frontend_next(request.cookies.get("g_oauth_next"))
+
+    def _error_redirect(message: str) -> RedirectResponse:
+        sep = "&" if "?" in next_url else "?"
+        # Errors use a query param the Login page can show; success uses the hash (below).
+        target = f"{next_url}{sep}google_error={quote(message)}"
+        resp = RedirectResponse(url=target, status_code=302)
+        resp.delete_cookie("g_oauth_state", path="/api/auth/google")
+        resp.delete_cookie("g_oauth_next", path="/api/auth/google")
+        return resp
+
+    if error:
+        return _error_redirect(error)
+    if not code or not state or not cookie_state or state != cookie_state:
+        return _error_redirect("invalid_oauth_state")
+    if not google_redirect_configured():
+        return _error_redirect("google_not_configured")
+
+    try:
+        claims = exchange_google_auth_code(code, redirect_uri=settings.GOOGLE_REDIRECT_URI)
+        user = get_or_create_google_user(session, claims)
+        token = issue_access_token_for_user(user)
+    except ValueError as exc:
+        logger.warning("Google OAuth callback failed: %s", exc)
+        return _error_redirect("google_auth_failed")
+
+    # Hash fragment keeps the JWT out of server logs / Referer on subsequent navigations.
+    if next_url.startswith("http"):
+        target = f"{next_url}#access_token={token}"
+    else:
+        # Relative path on same host as this API (production static on :8000).
+        target = f"{next_url}#access_token={token}"
+    resp = RedirectResponse(url=target, status_code=302)
+    resp.delete_cookie("g_oauth_state", path="/api/auth/google")
+    resp.delete_cookie("g_oauth_next", path="/api/auth/google")
+    return resp
+
+
 @app.get("/api/users/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     """Returns the logged-in analyst's profile details."""
@@ -280,8 +585,10 @@ def get_me(current_user: User = Depends(get_current_user)):
 # --- ML CASCADE PREDICTION & METRICS ---
 
 @app.post("/api/predict")
+@limiter.limit("60/minute")
 async def predict_flow(
-    request: PredictionRequest, 
+    request: Request,
+    body: PredictionRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -295,7 +602,7 @@ async def predict_flow(
         
     try:
         # Run detection (needs to run in main thread or run pool if blocking, but it's fast enough)
-        result = detector.detect(request.features)
+        result = detector.detect(body.features)
     except Exception as e:
         logger.error(f"Inference failed: {e}")
         raise HTTPException(
@@ -306,7 +613,7 @@ async def predict_flow(
     label = result["predicted_label"]
     # Determine IP/Port display metadata using deterministic hash of features
     import hashlib
-    features_hash = hashlib.md5(json.dumps(request.features).encode('utf-8')).hexdigest()
+    features_hash = hashlib.md5(json.dumps(body.features).encode('utf-8')).hexdigest()
     idx = int(features_hash, 16) % 1000000
     src_ip, dest_ip, src_port, dest_port = get_raw_flow_metadata(idx, label)
     result["source_ip"] = src_ip
@@ -320,13 +627,13 @@ async def predict_flow(
             predicted_label=label,
             confidence=result["confidence"],
             tier=result["tier"],
-            source_scenario=request.source_scenario or "simulation",
+            source_scenario=body.source_scenario or "simulation",
             severity=result.get("severity", "Medium"),
             source_ip=src_ip,
             dest_ip=dest_ip,
             source_port=src_port,
             dest_port=dest_port,
-            raw_features=json.dumps(request.features)
+            raw_features=json.dumps(body.features)
         )
         session.add(alert)
         session.commit()
@@ -340,39 +647,76 @@ async def predict_flow(
         
     return result
 
-# Configure Gemini API client
-import google.generativeai as genai
-from app.services.gemini_key_manager import GeminiKeyManager
+# Nebius AI Studio (OpenAI-compatible) — SENTINEL AI + XAI prose
+from app.services.nebius_client import nebius_client
 
-key_manager = GeminiKeyManager()
-if key_manager.keys:
-    try:
-        genai.configure(api_key=key_manager.get_current_key())
-    except Exception as gem_err:
-        logger.error(f"Failed to initialize Gemini client: {gem_err}")
 
-def is_quota_error(e: Exception) -> bool:
+def _is_nebius_transient_error(e: Exception) -> bool:
+    """Detect rate-limit / quota / overloaded responses from Nebius."""
     err_str = str(e).lower()
-    try:
-        from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
-        if isinstance(e, ResourceExhausted):
-            return True
-        if isinstance(e, ServiceUnavailable) and "quota" in err_str:
-            return True
-    except ImportError:
-        pass
-    if hasattr(e, "code"):
-        code = getattr(e, "code")
-        if code == 429:
-            return True
-        if code == 503 and "quota" in err_str:
-            return True
-    if any(term in err_str for term in ["quota", "rate limit", "resource_exhausted", "too many requests"]):
+    status = getattr(e, "status_code", None) or getattr(e, "code", None)
+    if status in (429, 503):
         return True
-    return False
+    return any(
+        term in err_str
+        for term in ("quota", "rate limit", "resource_exhausted", "too many requests", "overloaded")
+    )
+
+
+def _ai_queries_used(user: User) -> int:
+    """Safe read of lifetime LLM query counter (handles pre-migration rows)."""
+    return int(getattr(user, "ai_queries_used", 0) or 0)
+
+
+def _is_ai_unlimited(user: User) -> bool:
+    """Admins have no lifetime AI cap (role is read from the DB, never the JWT)."""
+    return (getattr(user, "role", "") or "").lower() == "admin"
+
+
+def _ai_queries_remaining(user: User) -> Optional[int]:
+    """How many successful LLM chat replies the user may still consume.
+
+    Returns ``None`` for unlimited (admin) users.
+    """
+    if _is_ai_unlimited(user):
+        return None
+    return max(0, settings.AI_QUERY_LIMIT - _ai_queries_used(user))
+
+
+def _ai_quota_fields(user: User) -> Dict[str, Any]:
+    """Shared quota payload for chat, status and quota endpoints."""
+    unlimited = _is_ai_unlimited(user)
+    return {
+        "ai_unlimited": unlimited,
+        "ai_queries_used": _ai_queries_used(user),
+        "ai_queries_remaining": _ai_queries_remaining(user),
+        "ai_query_limit": None if unlimited else settings.AI_QUERY_LIMIT,
+    }
+
+
+def _increment_ai_queries_used(session: Session, user: User) -> User:
+    """Bump lifetime LLM counter after a successful Nebius/chat completion."""
+    db_user = session.get(User, user.id)
+    if db_user is None:
+        return user
+    db_user.ai_queries_used = _ai_queries_used(db_user) + 1
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+    return db_user
+
+
+_AI_QUOTA_EXHAUSTED_DETAIL = (
+    f"You've used all {settings.AI_QUERY_LIMIT} AI questions included with your account. "
+    "Common topics (cascade architecture, simulator presets, threat types) still work via "
+    "built-in answers — or ask your instructor if you need more AI questions."
+)
+
 
 @app.post("/api/xai/explain")
+@limiter.limit("30/minute")
 async def explain_packet(
+    request: Request,
     req: XaiRequest,
     current_user: User = Depends(get_current_user)
 ):
@@ -406,38 +750,41 @@ async def explain_packet(
     tier_name = tier_names.get(req.tier, f"Tier {req.tier} Classifier")
 
     explanation = None
-    if key_manager.keys:
-        current_key = key_manager.get_current_key()
+    if nebius_client.is_available():
+        prompt = (
+            "You are a security operations center (SOC) AI analyst.\n"
+            f"Provide exactly one plain-English sentence explaining why this network flow was "
+            f"classified as '{req.predicted_label}' by the ML cascade.\n"
+            "Keep the sentence professional, highly technical but readable, and direct. "
+            "Mention specific values and comparison with their benign baseline averages if appropriate.\n\n"
+            f"Resolution Tier: {tier_name}\n"
+            f"Confidence level: {req.confidence:.2%}\n"
+            f"Top contributing packet features:\n{features_str}\n\n"
+            "Format instructions:\n"
+            "Provide exactly one natural, readable sentence. Do NOT use markdown bolding, "
+            "asterisks (*), or lists in the output sentence. Do not say "
+            "\"Based on the provided information...\" or similar intro phrases."
+        )
         try:
-            genai.configure(api_key=current_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            prompt = f"""
-            You are a security operations center (SOC) AI analyst.
-            Provide exactly one plain-English sentence explaining why this network flow was classified as '{req.predicted_label}' by the ML cascade.
-            Keep the sentence professional, highly technical but readable, and direct. Mention specific values and comparison with their benign baseline averages if appropriate.
-            
-            Resolution Tier: {tier_name}
-            Confidence level: {req.confidence:.2%}
-            Top contributing packet features:
-            {features_str}
-            
-            Format instructions:
-            Provide exactly one natural, readable sentence. Do NOT use markdown bolding, asterisks (*), or lists in the output sentence. Do not say "Based on the provided information..." or similar intro phrases.
-            """
             loop = asyncio.get_running_loop()
-            def call_gemini():
-                res = model.generate_content(prompt)
-                return res.text.strip()
-                
-            explanation = await loop.run_in_executor(None, call_gemini)
+
+            def call_nebius() -> str:
+                return nebius_client.chat_completion(
+                    [
+                        {"role": "system", "content": "You are a concise SOC AI analyst for Cascadyx, a LightGBM → Random Forest → XGBoost/weighted-vote cascade detector. Never mention any AI vendor or platform name."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=256,
+                )
+
+            explanation = await loop.run_in_executor(None, call_nebius)
             explanation = explanation.replace("*", "").replace("`", "").strip()
-            key_manager.rotate()
         except Exception as api_err:
-            if is_quota_error(api_err):
-                logger.warning(f"Quota error in explain endpoint, marking key index {key_manager.keys.index(current_key)} as exhausted.")
-                key_manager.mark_exhausted(current_key)
+            if _is_nebius_transient_error(api_err):
+                logger.warning("Nebius transient error in explain endpoint: %s", api_err)
             else:
-                logger.error(f"Gemini API execution error: {api_err}")
+                logger.error("Nebius API execution error in explain: %s", api_err)
             explanation = None
 
     if not explanation:
@@ -496,7 +843,7 @@ RULES_QA = [
     },
     {
         "keywords": ["who created this", "about this project", "project creator"],
-        "answer": "This is the AI-Powered Cybersecurity Threat Simulator, designed by Antigravity for security operations analysts to safely simulate threat replays and study Cascade ML explainability.",
+        "answer": "This is Cascadyx (Signal Observatory), a cybersecurity console for security operations analysts to safely explore sealed-lab attack sessions and study explainable cascade detection (LightGBM → Random Forest → XGBoost/weighted vote).",
         "source": "Rule-Based"
     }
 ]
@@ -525,26 +872,29 @@ def _save_chat_turn(
 
     session.add(ChatMessage(conversation_id=conversation.id, role="user", content=user_msg))
     session.add(ChatMessage(conversation_id=conversation.id, role="assistant", content=answer, source=source))
-    conversation.updated_at = datetime.utcnow()
+    conversation.updated_at = datetime.now(timezone.utc)
     session.add(conversation)
     session.commit()
     return conversation.id
 
 
 @app.post("/api/chat")
+@limiter.limit("30/minute")
 async def chat_assistant(
+    request: Request,
     req: ChatRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Provides security operations intelligence through Gemini (primary, with
-    per-conversation memory) and rule-based/offline fallback when Gemini is
+    """Provides security operations intelligence through Nebius (primary, with
+    per-conversation memory) and rule-based/offline fallback when Nebius is
     unavailable (Protected). Persists the turn to a Conversation unless incognito."""
+    _ = request  # required by slowapi key function / rate-limit decorator
     user_msg = req.message.strip()
     user_msg_lower = user_msg.lower()
 
     # 1. Check for "explain last alert" trigger -- real DB context, useful to
-    # both the Gemini prompt and the rule-based/offline fallback text.
+    # both the Nebius prompt and the rule-based/offline fallback text.
     is_last_alert_query = any(k in user_msg_lower for k in [
         "last alert", "last threat", "last attack", "latest alert", "latest threat", "latest attack", "explain the last"
     ])
@@ -582,21 +932,41 @@ async def chat_assistant(
 
     answer: Optional[str] = None
     source: Optional[str] = None
+    used_llm = False
+    unlimited = _is_ai_unlimited(current_user)
+    remaining_before = _ai_queries_remaining(current_user)
+    has_quota = unlimited or (remaining_before or 0) > 0
+    ai_online = nebius_client.is_available()
 
-    # 2. Gemini is the primary engine when configured -- it gets real
-    # conversation memory (prior turns from this Conversation) so follow-up
-    # questions stay coherent, not just single-shot Q&A.
-    if key_manager.keys:
+    # 2. LLM is the primary engine when configured and the user still has quota.
+    # It gets real conversation memory (prior turns) so follow-ups stay coherent.
+    # Rule-based answers never consume quota. When quota is exhausted, skip LLM
+    # and fall through to rules; if nothing matches, reject with a friendly 429.
+    if ai_online and has_quota:
         system_instruction = (
-            "You are a helpful, professional cybersecurity operations center (SOC) AI assistant for this Threat Simulator portal. "
-            "You answer questions related to cybersecurity, network traffic patterns, machine learning intrusion detection (LightGBM, Random Forest, XGBoost), the 3-tier cascade detector, or general SOC analyst guidelines. "
-            "If the question is off-topic (e.g. cooking, travel, general off-topic chat, non-cybersecurity topics), politely decline to answer using the following professional analyst response or a very similar tone:\n"
-            "\"My operational scope covers cybersecurity threats, network intrusion analysis, the THREATSIM detection system, and SOC analyst workflows. For [topic], I'd recommend a general-purpose AI. How can I help with your security analysis?\"\n"
+            "You are the Cascadyx AI assistant, a helpful, professional cybersecurity operations center (SOC) analyst "
+            "embedded in the Cascadyx (Signal Observatory) console. Never call the product 'THREATSIM', 'Threat Simulator "
+            "portal', or mention the name of any AI vendor, model provider, or hosting platform; if asked who you are, say you "
+            "are the Cascadyx AI assistant. "
+            "Cascadyx detects network intrusions with a 3-tier ML cascade: Tier 1 is LightGBM, the first-pass screener that "
+            "scores every flow (highest overall accuracy, ~99.47%) and resolves most flows when its confidence is at least 0.85; "
+            "Tier 2 is Random Forest, which validates flows Tier 1 is unsure about and drives feature-level explainability; "
+            "Tier 3 is the expert ensemble, a weighted vote of LightGBM 0.2 / Random Forest 0.3 / XGBoost 0.5 that resolves the "
+            "remaining low-confidence flows. Describe the cascade exactly this way and do not invent other tier models. "
+            "You answer questions related to cybersecurity, network traffic patterns, machine learning intrusion detection "
+            "(LightGBM, Random Forest, XGBoost), the 3-tier cascade detector, logged alerts from this console "
+            "(including explaining the latest/last alert, verdicts, confidence, tiers, and feature attributions), "
+            "simulator presets, or general SOC analyst guidelines. "
+            "When the user asks about the latest or last alert and alert context is provided in the message, "
+            "summarize that context clearly — do not treat alert explanation as off-topic. "
+            "If the question is truly off-topic (e.g. cooking, travel, non-cybersecurity topics), politely decline using "
+            "the following professional analyst response or a very similar tone:\n"
+            "\"My operational scope covers cybersecurity threats, network intrusion analysis, the Cascadyx detection cascade, "
+            "and SOC analyst workflows. For [topic], I'd recommend a general-purpose AI. How can I help with your security analysis?\"\n"
             "Substitute [topic] with the actual off-topic subject mentioned by the user."
         )
 
-        # Prior turns from this conversation, translated to Gemini's role naming.
-        gemini_history = []
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_instruction}]
         if req.conversation_id is not None and not req.incognito:
             prior = session.exec(
                 select(ChatMessage)
@@ -604,50 +974,36 @@ async def chat_assistant(
                 .order_by(ChatMessage.id.asc())
                 .limit(20)
             ).all()
-            gemini_history = [
-                {"role": "model" if m.role == "assistant" else "user", "parts": [m.content]}
-                for m in prior
-            ]
+            for m in prior:
+                role = "assistant" if m.role == "assistant" else "user"
+                messages.append({"role": role, "content": m.content})
 
         message_text = user_msg
         if latest_alert_details:
-            message_text = f"Context on the latest recorded security threat alert: {latest_alert_details}\n\nUser message: {user_msg}"
+            message_text = (
+                f"Context on the latest recorded security threat alert: {latest_alert_details}\n\n"
+                f"User message: {user_msg}"
+            )
+        messages.append({"role": "user", "content": message_text})
 
-        MAX_RETRIES = min(10, len(key_manager.keys))
-        last_error = None
+        try:
+            loop = asyncio.get_running_loop()
 
-        for attempt in range(MAX_RETRIES):
-            current_key = key_manager.get_current_key()
-            try:
-                genai.configure(api_key=current_key)
-                model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_instruction)
+            def call_nebius() -> str:
+                return nebius_client.chat_completion(messages, temperature=0.4, max_tokens=1024)
 
-                loop = asyncio.get_running_loop()
-                def call_gemini():
-                    chat = model.start_chat(history=gemini_history)
-                    res = chat.send_message(message_text)
-                    return res.text.strip()
+            answer = await loop.run_in_executor(None, call_nebius)
+            answer = answer.replace("*", "").replace("`", "").strip()
+            source = "AI"  # Provider name never exposed to the UI
+            used_llm = True
+        except Exception as e:
+            if _is_nebius_transient_error(e):
+                logger.warning("Nebius transient/rate-limit error: %s", e)
+            else:
+                logger.error("Nebius API error: %s", e)
+            answer = None
 
-                answer = await loop.run_in_executor(None, call_gemini)
-                answer = answer.replace("*", "").replace("`", "").strip()
-                source = "AI Gemini"
-                key_manager.rotate()  # success -- spread load evenly next time
-                break
-            except Exception as e:
-                if is_quota_error(e):
-                    logger.warning(f"Gemini API quota error on key index {key_manager.keys.index(current_key)}: {e}")
-                    key_manager.mark_exhausted(current_key)
-                    last_error = e
-                    continue  # try next key instantly
-                else:
-                    logger.error(f"Gemini API non-quota error: {e}")
-                    last_error = e
-                    break
-
-        if answer is None:
-            logger.error(f"Gemini unavailable after retries. Last error: {last_error}")
-
-    # 3. Rule-based keyword match -- used when Gemini isn't configured or failed.
+    # 3. Rule-based keyword match -- used when LLM isn't configured, failed, or quota is exhausted.
     if answer is None and not is_last_alert_query:
         for rule in RULES_QA:
             if any(kw in user_msg_lower for kw in rule["keywords"]):
@@ -655,40 +1011,74 @@ async def chat_assistant(
                 source = rule["source"]
                 break
 
-    # 4. Last-alert detail text, or a generic offline notice.
+    # 4. Last-alert detail text, quota rejection, or a generic offline notice.
     if answer is None:
         if last_alert_fallback_text:
             answer = last_alert_fallback_text
             source = "Rule-Based"
-        elif key_manager.keys:
+        elif ai_online and not has_quota:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_AI_QUOTA_EXHAUSTED_DETAIL,
+            )
+        elif ai_online:
             answer = "Our AI is experiencing high demand right now. Your rule-based answers are still available."
             source = "Error Fallback"
         else:
             answer = "I am currently operating in offline mode. Please ask about the cascade architecture, simulator presets, or specific threat types (DDoS, Port Scan, Brute Force)."
             source = "Offline Fallback"
 
+    if used_llm:
+        current_user = _increment_ai_queries_used(session, current_user)
+
     conversation_id = _save_chat_turn(session, current_user, req.conversation_id, user_msg, answer, source, req.incognito)
 
     return {
         "answer": answer,
         "source": source,
-        "conversation_id": conversation_id
+        "conversation_id": conversation_id,
+        **_ai_quota_fields(current_user),
     }
 
 
 @app.get("/api/chat/status")
 def get_chat_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ):
-    """Returns the current operational status of the Gemini hybrid system (Protected)."""
-    keys_total = len(key_manager.keys)
-    keys_exhausted = len(key_manager.exhausted)
-    keys_available = keys_total - keys_exhausted
+    """Returns AI availability and the caller's remaining lifetime AI quota (Protected).
+
+    Intentionally omits provider name and model string from the payload shown to the UI.
+    """
+    # Re-read user so quota reflects the latest committed counter.
+    db_user = session.get(User, current_user.id) or current_user
+    available = nebius_client.is_available()
     return {
-        "gemini_available": keys_available > 0,
-        "keys_total": keys_total,
-        "keys_available": keys_available,
-        "keys_exhausted": keys_exhausted
+        "ai_available": available,
+        "status": "AI available" if available else "AI offline",
+        "mode": "ai" if available else "rule-based",
+        **_ai_quota_fields(db_user),
+    }
+
+
+@app.get("/api/chat/quota")
+def get_chat_quota(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Returns the caller's lifetime AI quota only (Protected).
+
+    Mirrors the quota fields of ``/api/chat/status`` and ``POST /api/chat``
+    (``ai_queries_used`` / ``ai_queries_remaining`` / ``ai_query_limit``), plus
+    short ``used`` / ``remaining`` / ``limit`` aliases.
+    """
+    db_user = session.get(User, current_user.id) or current_user
+    fields = _ai_quota_fields(db_user)
+    return {
+        **fields,
+        "used": fields["ai_queries_used"],
+        "remaining": fields["ai_queries_remaining"],
+        "limit": fields["ai_query_limit"],
     }
 
 
@@ -798,8 +1188,9 @@ def delete_conversation(
 
 @app.get("/api/models/metrics")
 def get_models_metrics():
-    """Reads and returns trained evaluation summaries and confusion matrix arrays."""
+    """Reads trained evaluation summaries, confusion matrices, and Phase 5 before/after hardening data."""
     metrics_dir = Path(settings.DATA_CACHE_DIR) / "metrics"
+    models_dir = Path(settings.DATA_CACHE_DIR) / "models"
     summary_path = metrics_dir / "summary.json"
     
     if not summary_path.exists():
@@ -818,9 +1209,27 @@ def get_models_metrics():
             if cm_path.exists():
                 with open(cm_path, "r") as f:
                     conf_matrices[model] = json.load(f)
-                    
-        # Extract feature importances from the Random Forest model dynamically
+
+        def _load_json(path: Path):
+            if not path.exists():
+                return None
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        baseline_summary = _load_json(metrics_dir / "baseline_summary.json")
+        hardened_summary = _load_json(metrics_dir / "hardened_summary.json")
+        comparison = _load_json(metrics_dir / "comparison.json")
+        hardening_report = _load_json(metrics_dir / "hardening_report.json")
+        active_variant = _load_json(models_dir / "active_variant.json") or {
+            "variant": "mid_baseline",
+            "production_models": "mid_baseline",
+            "hardened_status": "experimental_non_production",
+        }
+        experimental_marker = _load_json(models_dir / "hardened" / "EXPERIMENTAL.json")
+
+        # Extract feature importances from the live (mid baseline) RF model
         feature_importances = []
+        production_variant = "mid_baseline"
         try:
             detector = get_detector()
             if detector and hasattr(detector, "models") and "random_forest" in detector.models:
@@ -833,14 +1242,50 @@ def get_models_metrics():
                 ]
                 # Sort descending
                 feature_importances.sort(key=lambda x: x["importance"], reverse=True)
+                production_variant = getattr(detector, "model_variant", production_variant)
         except Exception as xai_err:
             logger.error(f"Failed to extract RF feature importances: {xai_err}")
 
+        from app.ml.cascade import BATCH_THROUGHPUT_FPS, SINGLE_FLOW_THROUGHPUT_FPS
+        from app.ml.harden import HARDENED_EXPERIMENTAL_NOTE, WEB_ATTACK_CAVEAT
+
+        recommendation = (comparison or {}).get("recommendation") or (
+            (hardening_report or {}).get("recommendation")
+        )
         return {
+            # `summary` is always the production (mid) metrics CascadeDetector uses.
             "summary": summary,
             "confusion_matrices": conf_matrices,
-            "feature_importances": feature_importances
+            "feature_importances": feature_importances,
+            "production_models": "mid_baseline",
+            "active_variant": production_variant,
+            "hardened_status": "experimental_non_production",
+            "experimental_note": (
+                (comparison or {}).get("experimental_note")
+                or (hardening_report or {}).get("experimental_note")
+                or HARDENED_EXPERIMENTAL_NOTE
+            ),
+            "recommendation": recommendation,
+            "recommendation_reason": (comparison or {}).get("recommendation_reason")
+            or (hardening_report or {}).get("recommendation_reason"),
+            "baseline_summary": baseline_summary,
+            "hardened_summary": hardened_summary,
+            "comparison": comparison,
+            "hardening_report": hardening_report,
+            "experimental_marker": experimental_marker,
+            "variant_meta": active_variant,
+            "web_attack_caveat": (
+                (comparison or {}).get("web_attack_caveat")
+                or (hardening_report or {}).get("web_attack_caveat")
+                or WEB_ATTACK_CAVEAT
+            ),
+            "throughput": {
+                "single_flow_fps": SINGLE_FLOW_THROUGHPUT_FPS,
+                "batch_flow_fps": BATCH_THROUGHPUT_FPS,
+            },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to read evaluation metrics: {e}")
         raise HTTPException(
@@ -966,7 +1411,9 @@ def get_benign_baseline(current_user: User = Depends(get_current_user)):
 
 
 @app.get("/api/alerts/export")
+@limiter.limit("20/minute")
 def export_alerts(
+    request: Request,
     format: str = "pdf",
     attack_type: Optional[str] = None,
     tier: Optional[int] = None,
@@ -976,7 +1423,21 @@ def export_alerts(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Generates an in-memory session report of filtered alerts in PDF or CSV format (Protected)."""
+    """Generates an in-memory session report of filtered alerts in PDF or CSV format (analyst+)."""
+    write_audit_log(
+        session,
+        user=current_user,
+        action="alerts.export",
+        detail={
+            "format": format,
+            "attack_type": attack_type,
+            "tier": tier,
+            "severity": severity,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+        },
+        request=request,
+    )
     statement = select(Alert)
     if attack_type:
         statement = statement.where(Alert.predicted_label == attack_type)
@@ -1198,10 +1659,14 @@ def get_simulate_scenarios(current_user: User = Depends(get_current_user)):
     }
 
 @app.post("/api/simulate/start")
+@limiter.limit("20/minute")
 async def simulate_start(
+    request: Request,
     req: SimulateStartRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ):
+    """Start CSV scenario simulation (analyst+; audited)."""
     if req.rate <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1216,6 +1681,17 @@ async def simulate_start(
         )
     try:
         simulator_engine.start(req.scenario, req.rate, req.duration_seconds)
+        write_audit_log(
+            session,
+            user=current_user,
+            action="simulate.start",
+            detail={
+                "scenario": req.scenario,
+                "rate": req.rate,
+                "duration_seconds": req.duration_seconds,
+            },
+            request=request,
+        )
         return {
             "status": "started",
             "scenario": req.scenario,
@@ -1241,12 +1717,23 @@ async def simulate_start(
         )
 
 @app.post("/api/simulate/stop")
-async def simulate_stop(current_user: User = Depends(get_current_user)):
-    """Stops the active simulation (Protected)."""
+async def simulate_stop(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Stops the active simulation (analyst+; audited)."""
     if not simulator_engine.is_running:
         return {"status": "not_running", "message": "No active simulation is running."}
     
     simulator_engine.stop()
+    write_audit_log(
+        session,
+        user=current_user,
+        action="simulate.stop",
+        detail={},
+        request=request,
+    )
     return {
         "status": "stopped",
         "stopped_by": current_user.username
@@ -1254,8 +1741,330 @@ async def simulate_stop(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/simulate/status")
 def simulate_status(current_user: User = Depends(get_current_user)):
-    """Retrieves current simulation running status, scenario details, and telemetry counters (Protected)."""
+    """Retrieves current simulation running status, scenario details, and telemetry counters (Protected).
+
+    Status includes ``mode`` (``idle`` | ``csv`` | ``replay``), ``source`` (scenario
+    id or PCAP path), and for replay: ``packets_parsed`` / ``flows_built``.
+    """
     return simulator_engine.get_status()
+
+
+@app.post("/api/simulate/replay/start")
+@limiter.limit("20/minute")
+async def simulate_replay_start(
+    request: Request,
+    req: ReplayStartRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Start isolated PCAP Live Replay (analyst+; recorded CIC / VirtualBox capture).
+
+    Never launches attack tools. ``pcap_path`` must resolve under ``DATA_RAW_DIR``
+    (typically ``data/raw/captures/...`` after copying from the sensor VM).
+    See ``docs/ISOLATED_REPLAY.md``.
+    """
+    from app.simulator.replay import SAFETY_BANNER
+
+    if req.rate <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Replay rate must be at least 1 flow per second.",
+        )
+    try:
+        resolved = _resolve_raw_pcap_path(req.pcap_path)
+        simulator_engine.start_replay(
+            resolved,
+            max_packets=req.max_packets,
+            rate=req.rate,
+            duration_seconds=req.duration_seconds,
+            source_scenario=req.source_scenario or "isolated_replay",
+        )
+        write_audit_log(
+            session,
+            user=current_user,
+            action="replay.start",
+            detail={
+                "pcap_path": str(resolved),
+                "max_packets": req.max_packets,
+                "rate": req.rate,
+                "duration_seconds": req.duration_seconds,
+                "source_scenario": req.source_scenario or "isolated_replay",
+            },
+            request=request,
+        )
+        return {
+            "status": "started",
+            "mode": "replay",
+            "source": str(resolved),
+            "max_packets": req.max_packets,
+            "rate": req.rate,
+            "duration_seconds": req.duration_seconds,
+            "source_scenario": req.source_scenario or "isolated_replay",
+            "triggered_by": current_user.username,
+            "safety_banner": SAFETY_BANNER,
+        }
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve),
+        ) from ve
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.error("Failed to start PCAP replay: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start isolated PCAP replay.",
+        ) from exc
+
+
+@app.post("/api/simulate/replay/stop")
+async def simulate_replay_stop(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Stop an active isolated PCAP Live Replay (analyst+; audited)."""
+    status_now = simulator_engine.get_status()
+    if not simulator_engine.is_running:
+        return {
+            "status": "not_running",
+            "mode": "idle",
+            "message": "No active replay is running.",
+        }
+    if status_now.get("mode") != "replay":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Engine is running in '{status_now.get('mode')}' mode, not replay. "
+                "Use POST /api/simulate/stop to abort the CSV simulator."
+            ),
+        )
+
+    simulator_engine.stop()
+    write_audit_log(
+        session,
+        user=current_user,
+        action="replay.stop",
+        detail={},
+        request=request,
+    )
+    return {
+        "status": "stopped",
+        "mode": "idle",
+        "stopped_by": current_user.username,
+    }
+
+
+# --- PCAP ANALYSIS ROUTE (Phase 1) ---
+
+def _resolve_raw_pcap_path(pcap_path: str) -> Path:
+    """Resolve a PCAP path that must stay under DATA_RAW_DIR (path-traversal safe)."""
+    raw_root = Path(settings.DATA_RAW_DIR).resolve()
+    candidate = Path(pcap_path)
+    if not candidate.is_absolute():
+        candidate = raw_root / candidate
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(raw_root)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"pcap_path must stay under DATA_RAW_DIR ({raw_root})",
+        ) from exc
+    if not resolved.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"PCAP file not found: {resolved}",
+        )
+    if resolved.suffix.lower() not in {".pcap", ".pcapng"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .pcap / .pcapng files are supported",
+        )
+    return resolved
+
+
+@app.post("/api/pcap/analyze")
+@limiter.limit("10/minute")
+async def pcap_analyze(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Stream-parse a CIC-IDS2017 PCAP slice, extract features, run CascadeDetector (analyst+).
+
+    Accepts either:
+      - JSON ``{"pcap_path": "PCAPs/Friday-WorkingHours.pcap", "max_packets": 200}``
+        (``pcap_path`` must resolve under ``DATA_RAW_DIR``)
+      - multipart form with ``file`` (small upload) and optional ``max_packets``,
+        or form field ``pcap_path`` under ``DATA_RAW_DIR``
+
+    Never loads an entire multi-GB day capture into memory; ``max_packets`` is capped.
+    """
+    from app.pcap.pipeline import API_ABSOLUTE_MAX_PACKETS, DEFAULT_MAX_PACKETS, analyze_pcap
+
+    detector: CascadeDetector = getattr(app.state, "detector", None)
+    if detector is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Machine learning cascade detector is not loaded yet.",
+        )
+
+    content_type = (request.headers.get("content-type") or "").lower()
+    tmp_path: Optional[Path] = None
+    try:
+        if "application/json" in content_type:
+            raw = await request.json()
+            payload = PcapAnalyzeBody(**raw)
+            resolved = _resolve_raw_pcap_path(payload.pcap_path)
+            pkt_cap = payload.max_packets
+            do_persist = payload.persist_alerts
+            do_broadcast = payload.broadcast
+            scenario = payload.source_scenario or "pcap"
+        elif "multipart/form-data" in content_type:
+            if settings.PUBLIC_MODE:
+                # Open-internet deploys never accept arbitrary file uploads (disk/CPU abuse).
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "PCAP uploads are disabled on the public deployment. "
+                        "Use the built-in Quick Lab captures instead."
+                    ),
+                )
+            form = await request.form()
+            pkt_cap = int(form.get("max_packets") or DEFAULT_MAX_PACKETS)
+            do_persist = str(form.get("persist_alerts", "true")).lower() not in {"0", "false", "no"}
+            do_broadcast = str(form.get("broadcast", "true")).lower() not in {"0", "false", "no"}
+            scenario = str(form.get("source_scenario") or "pcap")
+
+            upload = form.get("file")
+            form_path = form.get("pcap_path")
+            if upload is not None and getattr(upload, "filename", None):
+                suffix = Path(str(upload.filename)).suffix.lower() or ".pcap"
+                if suffix not in {".pcap", ".pcapng"}:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Only .pcap / .pcapng uploads are supported",
+                    )
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                tmp_path = Path(tmp.name)
+                tmp.close()
+                with open(tmp_path, "wb") as out_f:
+                    shutil.copyfileobj(upload.file, out_f)
+                resolved = tmp_path
+            elif form_path:
+                resolved = _resolve_raw_pcap_path(str(form_path))
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Provide multipart file or pcap_path",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Use application/json or multipart/form-data",
+            )
+
+        if pkt_cap <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="max_packets must be a positive integer",
+            )
+        if pkt_cap > API_ABSOLUTE_MAX_PACKETS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"max_packets capped at {API_ABSOLUTE_MAX_PACKETS} for API safety",
+            )
+
+        logger.info(
+            "PCAP analyze requested by %s: path=%s max_packets=%d",
+            current_user.username,
+            resolved,
+            pkt_cap,
+        )
+        summary = await analyze_pcap(
+            pcap_path=resolved,
+            max_packets=pkt_cap,
+            detector=detector,
+            persist_alerts=do_persist,
+            broadcast=do_broadcast,
+            source_scenario=scenario,
+        )
+        summary["requested_by"] = current_user.username
+        write_audit_log(
+            session,
+            user=current_user,
+            action="pcap.analyze",
+            detail={
+                "pcap_path": str(resolved),
+                "max_packets": pkt_cap,
+                "persist_alerts": do_persist,
+                "broadcast": do_broadcast,
+                "source_scenario": scenario,
+                "flows": summary.get("flows_built") or summary.get("flows"),
+                "alerts_persisted": summary.get("alerts_persisted"),
+            },
+            request=request,
+        )
+        return summary
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("PCAP analyze failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="PCAP analysis failed. Check server logs for details.",
+        ) from exc
+    finally:
+        if tmp_path is not None and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                logger.warning("Could not delete temp PCAP upload %s", tmp_path)
+
+
+@app.get("/api/audit-logs")
+def list_audit_logs(
+    action: Optional[str] = None,
+    limit: int = 50,
+    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+):
+    """List recent AuditLog rows (Admin)."""
+    limit = max(1, min(limit, 200))
+    statement = select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit)
+    if action:
+        statement = select(AuditLog).where(AuditLog.action == action).order_by(
+            AuditLog.timestamp.desc()
+        ).limit(limit)
+    rows = session.exec(statement).all()
+    return [
+        {
+            "id": r.id,
+            "timestamp": r.timestamp,
+            "user_id": r.user_id,
+            "username": r.username,
+            "role": r.role,
+            "action": r.action,
+            "detail": json.loads(r.detail) if r.detail else {},
+            "ip_address": r.ip_address,
+        }
+        for r in rows
+    ]
+
 
 # --- WEBSOCKET LIVE ROUTE ---
 
@@ -1290,3 +2099,16 @@ async def websocket_live_endpoint(websocket: WebSocket, token: Optional[str] = N
         logger.info(f"WebSocket client connection closed: {e}")
     finally:
         manager.disconnect(websocket)
+
+
+# --- STATIC UI (Phase 7 one-command demo) ---
+# Registered last so /api/*, /ws/*, and OpenAPI routes keep priority.
+# Build with: cd frontend; npm run build  →  serves SPA from this same port.
+from app.routers import cascade_demo as _cascade_demo_router
+app.include_router(_cascade_demo_router.router)
+from app.routers import reviews as _reviews_router
+app.include_router(_reviews_router.router)
+from app.routers import lab as _lab_router
+app.include_router(_lab_router.router)
+
+mount_frontend(app, project_name=settings.PROJECT_NAME)

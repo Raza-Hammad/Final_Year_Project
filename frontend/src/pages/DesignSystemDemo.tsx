@@ -3,6 +3,37 @@ import GlowPanel from '../components/ui/GlowPanel';
 import GlowButton from '../components/ui/GlowButton';
 import StatusBadge from '../components/ui/StatusBadge';
 import Logomark from '../components/ui/Logomark';
+import CascadeMachine from '../components/lattice/CascadeMachine';
+import ThreatDnaSignature from '../components/ThreatDnaSignature';
+import type { DetectionData } from '../dashboard/types';
+
+const DNA_SAMPLE: DetectionData = {
+  predicted_label: 'DDoS',
+  confidence: 0.97,
+  tier: 1,
+  tier_name: 'Tier 1: LightGBM (Fast Screener)',
+  top_features: [],
+  raw_features: {
+    Init_Win_bytes_forward: 8192,
+    Init_Win_bytes_backward: 0,
+    'Bwd Packet Length Max': 0,
+    'Fwd Packet Length Max': 1460,
+    'Average Packet Size': 920,
+    'Packet Length Variance': 310000,
+    'Total Length of Fwd Packets': 6400,
+    'Bwd Packets/s': 12,
+  },
+  benign_averages: {
+    Init_Win_bytes_forward: 4200,
+    Init_Win_bytes_backward: 2900,
+    'Bwd Packet Length Max': 640,
+    'Fwd Packet Length Max': 240,
+    'Average Packet Size': 160,
+    'Packet Length Variance': 40000,
+    'Total Length of Fwd Packets': 900,
+    'Bwd Packets/s': 420,
+  },
+};
 import { RefreshCw } from 'lucide-react';
 
 const SWATCHES: { label: string; varName: string }[] = [
@@ -102,6 +133,24 @@ export const DesignSystemDemo: React.FC = () => {
           </div>
         </section>
 
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-[var(--sr-text-primary)]">
+            Cascade machine <span className="font-normal text-[var(--sr-text-muted)]">— sample counts; use the walkthrough buttons to replay a T1 / T2 / T3 exit</span>
+          </h2>
+          <GlowPanel className="p-5">
+            <CascadeMachine liveTiers={{ 1: 1840, 2: 212, 3: 37 }} height={300} />
+          </GlowPanel>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-[var(--sr-text-primary)]">
+            Threat DNA signature <span className="font-normal text-[var(--sr-text-muted)]">— one-shot reveal, then static</span>
+          </h2>
+          <GlowPanel className="max-w-md p-5">
+            <ThreatDnaSignature detection={DNA_SAMPLE} />
+          </GlowPanel>
+        </section>
+
         {/* Typography */}
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <GlowPanel>
@@ -164,7 +213,7 @@ export const DesignSystemDemo: React.FC = () => {
               <StatusBadge status="Low" />
               <StatusBadge status="Info" />
               <StatusBadge status="Rule-Based" />
-              <StatusBadge status="Gemini" />
+              <StatusBadge status="AI" />
             </div>
           </GlowPanel>
         </section>

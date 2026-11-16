@@ -1,5 +1,6 @@
 from app.db.models import (
-    User, Alert, UserCreate, UserResponse, Token, TokenData, PredictionRequest,
+    User, Alert, AuditLog, Review, ReviewHelpful, UserCreate, UserResponse, Token, TokenData, PredictionRequest,
+    GoogleAuthRequest,
     Conversation, ChatMessage, ConversationSummary, ChatMessageResponse,
     ConversationDetail, ConversationUpdate
 )

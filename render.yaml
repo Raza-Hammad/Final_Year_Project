@@ -1,0 +1,35 @@
+# Render Blueprint — Cascadyx on the FREE web-service plan. Full guide: docs/GO_LIVE.md
+#
+# Public URL will be   https://<service name>.onrender.com
+# If the name `cascadyx` is already taken on Render, change `name:` below
+# (e.g. cascadyx-fyp / cascadyx-app) BEFORE creating the Blueprint.
+#
+# `sync: false` values are asked for in the Render dashboard on first deploy.
+# NEVER put real secrets in this file. Optional extras (NEBIUS_API_KEY,
+# GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, PUBLIC_BASE_URL) are added later in
+# Dashboard -> Environment; they are intentionally not listed here.
+services:
+  - type: web
+    name: cascadyx
+    runtime: docker
+    plan: free
+    region: singapore            # nearest to Pakistan; also: frankfurt, oregon, ohio
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true             # redeploy on every push to the connected branch
+    envVars:
+      - key: PUBLIC_MODE
+        value: "1"
+      - key: JWT_SECRET            # Render generates a strong random value once
+        generateValue: true
+      - key: ADMIN_SEED_PASSWORD   # you choose (>= 12 chars); seeds user "admin"
+        sync: false
+      - key: ACCESS_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: AI_QUERY_LIMIT
+        value: "10"
+      - key: LAB_SENSOR_WATCH
+        value: "0"
+      - key: OMP_NUM_THREADS       # free tier = 512 MB / 0.1 CPU: no thread fan-out
+        value: "1"

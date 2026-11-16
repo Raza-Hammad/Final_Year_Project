@@ -11,14 +11,28 @@ def test_smote_stats_requires_auth(client):
     assert resp.status_code == 401
 
 
-def test_csv_export(client, auth_headers):
+def test_csv_export(client, admin_headers):
+    resp = client.get("/api/alerts/export?format=csv", headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+    first_line = resp.text.split("\n")[0]
+    assert "--- AI SOC TELEMETRY EXPORT REPORT ---" in first_line
+
+
+def test_csv_export_analyst(client, auth_headers):
+    """Students (analyst role) can download CSV reports for coursework."""
     resp = client.get("/api/alerts/export?format=csv", headers=auth_headers)
     assert resp.status_code == 200, resp.text
     first_line = resp.text.split("\n")[0]
     assert "--- AI SOC TELEMETRY EXPORT REPORT ---" in first_line
 
 
-def test_pdf_export(client, auth_headers):
+def test_pdf_export(client, admin_headers):
+    resp = client.get("/api/alerts/export?format=pdf", headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.content[:4] == b"%PDF"
+
+
+def test_pdf_export_analyst(client, auth_headers):
     resp = client.get("/api/alerts/export?format=pdf", headers=auth_headers)
     assert resp.status_code == 200, resp.text
     assert resp.content[:4] == b"%PDF"

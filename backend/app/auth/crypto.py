@@ -49,6 +49,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 # this codebase (CascadeDetector, ConnectionManager) -- resets on server restart,
 # which is an acceptable tradeoff for a locally-run FYP demo rather than standing up
 # a persistent revocation store for a single-process deployment.
+# See docs/KNOWN_LIMITATIONS.md (Phase 6).
 _revoked_jtis: set[str] = set()
 
 def revoke_token(jti: str) -> None:
@@ -113,3 +114,30 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def require_roles(*allowed_roles: str):
+    """FastAPI dependency factory enforcing RBAC on sensitive routes.
+
+    Usage::
+        current_user: User = Depends(require_roles("admin"))
+    """
+    allowed = {r.lower() for r in allowed_roles}
+
+    def _dependency(current_user: User = Depends(get_current_user)) -> User:
+        role = (current_user.role or "").lower()
+        if role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Insufficient privileges. Requires role in "
+                    f"{sorted(allowed)}; current role is '{current_user.role}'."
+                ),
+            )
+        return current_user
+
+    return _dependency
+
+
+# Convenience dependency for admin-only sensitive actions (sim/replay/pcap/export).
+require_admin = require_roles("admin")

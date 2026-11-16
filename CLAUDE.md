@@ -19,6 +19,11 @@ This file outlines build, run, and quality commands, along with coding styles fo
 - **Run Dev Server**: `npm run dev` (inside `/frontend`)
 - **Build Production Bundle**: `npm run build` (inside `/frontend`)
 
+### One-command demo (Phase 7)
+- **Windows**: `.\scripts\run_demo.ps1` from repo root — builds `frontend/dist` if needed, then serves SPA + API + WS from `http://127.0.0.1:8000`
+- **Manual**: `cd frontend; npm run build` then `cd ../backend; uvicorn app.main:app --host 127.0.0.1 --port 8000`
+- **Demo checklist**: `docs/DEMO.md`
+
 ## Coding & Style Guidelines
 
 ### Python (Backend)

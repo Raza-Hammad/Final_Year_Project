@@ -6,65 +6,73 @@ interface AuroraBackgroundProps {
   variant?: 'hero' | 'ambient';
 }
 
-// Soft, slowly-drifting gradient blobs -- the "aurora/mesh gradient" technique
-// that reads as premium/designed rather than a flat white canvas. Colors are
-// drawn entirely from --sr-accent/--sr-accent-2, so this re-colors itself
-// automatically between light and dark theme with no separate dark variant needed.
+/**
+ * Soft drifting colour washes. Built from radial gradients (not `filter: blur`)
+ * so the browser rasterises each layer once and the drift is a pure compositor
+ * transform — the old 100px blur layers repainted every frame and were the
+ * single biggest CSS paint cost on Intro/Login.
+ *
+ * Colours come from --sr-accent / --sr-accent-2, so it re-themes automatically.
+ */
 export const AuroraBackground: React.FC<AuroraBackgroundProps> = ({ className = '', variant = 'hero' }) => {
   const isHero = variant === 'hero';
+  const a = isHero ? 0.3 : 0.12;
+  const b = isHero ? 0.28 : 0.11;
+  const c = 0.17;
   return (
     <div className={`pointer-events-none select-none overflow-hidden ${className}`} aria-hidden="true">
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes aurora-drift-a {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(4%, 6%) scale(1.08); }
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(4%, 6%, 0) scale(1.08); }
         }
         @keyframes aurora-drift-b {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-5%, -4%) scale(1.1); }
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(-5%, -4%, 0) scale(1.1); }
         }
         @keyframes aurora-drift-c {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(3%, -5%) scale(1.05); }
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(3%, -5%, 0) scale(1.05); }
         }
-      `}} />
+        @media (prefers-reduced-motion: reduce) {
+          .aurora-layer { animation: none !important; }
+        }
+      `,
+        }}
+      />
       <div
-        className="absolute rounded-full"
+        className="aurora-layer absolute rounded-full will-change-transform"
         style={{
-          width: isHero ? '55%' : '38%',
-          height: isHero ? '55%' : '38%',
-          top: '-10%',
-          left: '-8%',
-          background: 'var(--sr-accent)',
-          opacity: isHero ? 0.24 : 0.1,
-          filter: 'blur(90px)',
+          width: isHero ? '70%' : '48%',
+          height: isHero ? '78%' : '52%',
+          top: '-18%',
+          left: '-14%',
+          background: `radial-gradient(closest-side, color-mix(in srgb, var(--sr-accent) ${Math.round(a * 100)}%, transparent), transparent)`,
           animation: 'aurora-drift-a 22s ease-in-out infinite',
         }}
       />
       <div
-        className="absolute rounded-full"
+        className="aurora-layer absolute rounded-full will-change-transform"
         style={{
-          width: isHero ? '48%' : '32%',
-          height: isHero ? '48%' : '32%',
-          bottom: '-12%',
-          right: '-6%',
-          background: 'var(--sr-accent-2)',
-          opacity: isHero ? 0.22 : 0.09,
-          filter: 'blur(90px)',
+          width: isHero ? '62%' : '42%',
+          height: isHero ? '70%' : '46%',
+          bottom: '-22%',
+          right: '-12%',
+          background: `radial-gradient(closest-side, color-mix(in srgb, var(--sr-accent-2) ${Math.round(b * 100)}%, transparent), transparent)`,
           animation: 'aurora-drift-b 26s ease-in-out infinite',
         }}
       />
       {isHero && (
         <div
-          className="absolute rounded-full"
+          className="aurora-layer absolute rounded-full will-change-transform"
           style={{
-            width: '32%',
-            height: '32%',
-            top: '35%',
-            left: '38%',
-            background: 'var(--sr-accent)',
-            opacity: 0.14,
-            filter: 'blur(100px)',
+            width: '44%',
+            height: '48%',
+            top: '26%',
+            left: '30%',
+            background: `radial-gradient(closest-side, color-mix(in srgb, var(--sr-accent) ${Math.round(c * 100)}%, transparent), transparent)`,
             animation: 'aurora-drift-c 30s ease-in-out infinite',
           }}
         />

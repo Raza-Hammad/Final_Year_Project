@@ -1,0 +1,207 @@
+{
+  "dataset": "CIC-IDS2017",
+  "web_attack_caveat": "Web Attack classes (Brute Force / XSS / Sql Injection) remain weak on CIC-IDS2017 due to scarce labelled samples. Hyperparameter search may shift F1 slightly but does not create a reliable web-attack detector. Scenario-level accuracy for pure web-attack traffic can stay near ~60%. Document this honestly in viva materials.",
+  "production_models": "mid_baseline",
+  "hardened_status": "experimental_non_production",
+  "experimental_note": "models/hardened/*.joblib are EXPERIMENTAL / NON-PRODUCTION. CascadeDetector loads only models/*.joblib (mid-eval baseline). Reduced RandomizedSearchCV runs that regress macro-F1 must not replace production.",
+  "search_budget": {
+    "search_samples": 40000,
+    "final_train_samples": 100000,
+    "n_iter_per_model": 4
+  },
+  "regressed_models": [
+    "LightGBM",
+    "Random Forest",
+    "XGBoost"
+  ],
+  "models": [
+    {
+      "name": "LightGBM",
+      "baseline_label": "mid_production",
+      "hardened_label": "experimental_non_production",
+      "baseline": {
+        "accuracy": 0.9974928214775733,
+        "macro_f1": 0.8434781671265642,
+        "avg_inference_latency_ms": 0.012995895861277598,
+        "per_class_f1": {
+          "BENIGN": 0.9986610375140922,
+          "Bot": 0.771255060728745,
+          "DDoS": 0.9995507900236323,
+          "DoS GoldenEye": 0.9941804073714839,
+          "DoS Hulk": 0.9987625643140916,
+          "DoS Slowhttptest": 0.9685423128046079,
+          "DoS slowloris": 0.9943844492440604,
+          "FTP-Patator": 0.9990551181102362,
+          "Heartbleed": 1.0,
+          "Infiltration": 0.7272727272727273,
+          "PortScan": 0.9967035037046339,
+          "SSH-Patator": 0.9995760915642221,
+          "Web Attack - Brute Force": 0.47322540473225405,
+          "Web Attack - Sql Injection": 0.5,
+          "Web Attack - XSS": 0.23100303951367782
+        },
+        "web_attack_f1": {
+          "Web Attack - Brute Force": 0.47322540473225405,
+          "Web Attack - Sql Injection": 0.5,
+          "Web Attack - XSS": 0.23100303951367782
+        }
+      },
+      "hardened": {
+        "accuracy": 0.9970101277281922,
+        "macro_f1": 0.8054254407555727,
+        "avg_inference_latency_ms": 0.01599459789300998,
+        "per_class_f1": {
+          "BENIGN": 0.9983777361925733,
+          "Bot": 0.7593908629441625,
+          "DDoS": 0.9987105849255656,
+          "DoS GoldenEye": 0.9878345498783455,
+          "DoS Hulk": 0.9984367536584307,
+          "DoS Slowhttptest": 0.9644444444444444,
+          "DoS slowloris": 0.9952565761103924,
+          "FTP-Patator": 0.9965222889661713,
+          "Heartbleed": 1.0,
+          "Infiltration": 0.45454545454545453,
+          "PortScan": 0.9963881909547738,
+          "SSH-Patator": 0.9944657300979141,
+          "Web Attack - Brute Force": 0.4573547589616811,
+          "Web Attack - Sql Injection": 0.26666666666666666,
+          "Web Attack - XSS": 0.21298701298701297
+        },
+        "web_attack_f1": {
+          "Web Attack - Brute Force": 0.4573547589616811,
+          "Web Attack - Sql Injection": 0.26666666666666666,
+          "Web Attack - XSS": 0.21298701298701297
+        }
+      },
+      "delta_accuracy": -0.00048269374938114673,
+      "delta_macro_f1": -0.03805272637099155,
+      "regressed": true
+    },
+    {
+      "name": "Random Forest",
+      "baseline_label": "mid_production",
+      "hardened_label": "experimental_non_production",
+      "baseline": {
+        "accuracy": 0.9957565384669788,
+        "macro_f1": 0.8140670392485223,
+        "avg_inference_latency_ms": 0.0016623757938627984,
+        "per_class_f1": {
+          "BENIGN": 0.997567022628784,
+          "Bot": 0.7394209354120267,
+          "DDoS": 0.998768689533861,
+          "DoS GoldenEye": 0.9811974270163285,
+          "DoS Hulk": 0.9945742226842977,
+          "DoS Slowhttptest": 0.9670231729055259,
+          "DoS slowloris": 0.9974070872947277,
+          "FTP-Patator": 0.996219281663516,
+          "Heartbleed": 1.0,
+          "Infiltration": 0.7272727272727273,
+          "PortScan": 0.9966087857569002,
+          "SSH-Patator": 0.9849462365591398,
+          "Web Attack - Brute Force": 0.30855855855855857,
+          "Web Attack - Sql Injection": 0.3333333333333333,
+          "Web Attack - XSS": 0.1881081081081081
+        },
+        "web_attack_f1": {
+          "Web Attack - Brute Force": 0.30855855855855857,
+          "Web Attack - Sql Injection": 0.3333333333333333,
+          "Web Attack - XSS": 0.1881081081081081
+        }
+      },
+      "hardened": {
+        "accuracy": 0.9956875822170672,
+        "macro_f1": 0.7820486152988038,
+        "avg_inference_latency_ms": 0.014253969767296778,
+        "per_class_f1": {
+          "BENIGN": 0.9975351049123727,
+          "Bot": 0.7523124357656732,
+          "DDoS": 0.9972845728574499,
+          "DoS GoldenEye": 0.9832512315270936,
+          "DoS Hulk": 0.9960810708121194,
+          "DoS Slowhttptest": 0.9280482550624731,
+          "DoS slowloris": 0.9935316946959897,
+          "FTP-Patator": 0.9887005649717514,
+          "Heartbleed": 0.6666666666666666,
+          "Infiltration": 0.5333333333333333,
+          "PortScan": 0.9959311915796089,
+          "SSH-Patator": 0.9897348160821214,
+          "Web Attack - Brute Force": 0.38748495788206977,
+          "Web Attack - Sql Injection": 0.3333333333333333,
+          "Web Attack - XSS": 0.1875
+        },
+        "web_attack_f1": {
+          "Web Attack - Brute Force": 0.38748495788206977,
+          "Web Attack - Sql Injection": 0.3333333333333333,
+          "Web Attack - XSS": 0.1875
+        }
+      },
+      "delta_accuracy": -6.895624991154481e-05,
+      "delta_macro_f1": -0.032018423949718544,
+      "regressed": true
+    },
+    {
+      "name": "XGBoost",
+      "baseline_label": "mid_production",
+      "hardened_label": "experimental_non_production",
+      "baseline": {
+        "accuracy": 0.9968067951964016,
+        "macro_f1": 0.8347696437887405,
+        "avg_inference_latency_ms": 0.005911433150586608,
+        "per_class_f1": {
+          "BENIGN": 0.9982494818995546,
+          "Bot": 0.7525150905432596,
+          "DDoS": 0.9994335163010568,
+          "DoS GoldenEye": 0.9908256880733946,
+          "DoS Hulk": 0.998360068203786,
+          "DoS Slowhttptest": 0.966282165039929,
+          "DoS slowloris": 0.9948096885813149,
+          "FTP-Patator": 0.9987389659520807,
+          "Heartbleed": 1.0,
+          "Infiltration": 0.7692307692307693,
+          "PortScan": 0.9967035037046339,
+          "SSH-Patator": 0.9995760915642221,
+          "Web Attack - Brute Force": 0.42782152230971127,
+          "Web Attack - Sql Injection": 0.4444444444444444,
+          "Web Attack - XSS": 0.18455366098294884
+        },
+        "web_attack_f1": {
+          "Web Attack - Brute Force": 0.42782152230971127,
+          "Web Attack - Sql Injection": 0.4444444444444444,
+          "Web Attack - XSS": 0.18455366098294884
+        }
+      },
+      "hardened": {
+        "accuracy": 0.9963983620238482,
+        "macro_f1": 0.7684504904694707,
+        "avg_inference_latency_ms": 0.0033317708172555275,
+        "per_class_f1": {
+          "BENIGN": 0.9979749118364584,
+          "Bot": 0.746268656716418,
+          "DDoS": 0.9984175051284556,
+          "DoS GoldenEye": 0.9931807111544082,
+          "DoS Hulk": 0.9980673181324647,
+          "DoS Slowhttptest": 0.968,
+          "DoS slowloris": 0.9974093264248705,
+          "FTP-Patator": 0.9927467675812046,
+          "Heartbleed": 0.5714285714285714,
+          "Infiltration": 0.3448275862068966,
+          "PortScan": 0.995932852813241,
+          "SSH-Patator": 0.9940323955669225,
+          "Web Attack - Brute Force": 0.35271317829457366,
+          "Web Attack - Sql Injection": 0.36363636363636365,
+          "Web Attack - XSS": 0.21212121212121213
+        },
+        "web_attack_f1": {
+          "Web Attack - Brute Force": 0.35271317829457366,
+          "Web Attack - Sql Injection": 0.36363636363636365,
+          "Web Attack - XSS": 0.21212121212121213
+        }
+      },
+      "delta_accuracy": -0.0004084331725533463,
+      "delta_macro_f1": -0.06631915331926985,
+      "regressed": true
+    }
+  ],
+  "recommendation": "keep_baseline",
+  "recommendation_reason": "Hardened search/retrain (often on a reduced sample budget) did not beat the mid-eval models trained on the full capped-SMOTE set. Live cascade stays on baseline. Hardened artifacts remain for Insights comparison. Re-run with larger --final-samples if seeking promotion."
+}

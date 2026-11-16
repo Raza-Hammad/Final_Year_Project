@@ -27,7 +27,7 @@ interface GlowPanelProps extends React.HTMLAttributes<HTMLDivElement> {
 export const GlowPanel: React.FC<GlowPanelProps> = ({ children, className = '', ...props }) => {
   return (
     <div
-      className={`relative bg-[var(--sr-glass-bg)] backdrop-blur-md border border-[var(--sr-border-hairline)] rounded-[var(--sr-radius-md)] p-5 shadow-[var(--sr-shadow-sm)] transition-all duration-200 hover:border-[var(--sr-border-hover)] hover:shadow-[0_4px_20px_rgba(42,120,214,0.08)] ${className}`}
+      className={`relative bg-[var(--sr-glass-bg)] backdrop-blur-md border border-[var(--sr-border-hairline)] rounded-[var(--sr-radius-md)] p-5 shadow-[var(--sr-shadow-sm)] transition-all duration-200 hover:border-[var(--sr-border-hover)] hover:shadow-[0_8px_28px_rgba(61,52,139,0.08)] ${className}`}
       {...props}
     >
       {children}

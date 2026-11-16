@@ -9,6 +9,12 @@ body {
   font-family: var(--sr-font-sans);
 }
 
+/* Recharts parks a hidden text-measurement span on <body> (leaks tick values such
+   as "500000" into page text). visibility keeps it measurable but out of innerText. */
+#recharts_measurement_span {
+  visibility: hidden;
+}
+
 /* Animations and Utilities */
 @keyframes fadeIn {
   from {

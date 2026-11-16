@@ -1,0 +1,51 @@
+# Keep the Docker/Fly build context small and free of secrets.
+
+# Secrets / env files — NEVER ship these (set values with `fly secrets set`)
+.env
+**/.env
+backend/env
+backend/.env
+frontend/.env
+
+# VCS / tooling / editor
+.git
+.github
+.claude
+.vscode
+.idea
+**/__pycache__
+**/*.pyc
+.pytest_cache
+**/.pytest_cache
+
+# Local virtualenv / node_modules / build output (rebuilt inside the image)
+backend/venv
+frontend/node_modules
+frontend/dist
+
+# Local logs and scratch
+backend/*.log
+backend/*.txt
+!backend/requirements.txt
+!backend/constraints-deploy.txt
+.cascadyx_servers.json
+
+# Docs / reports are not needed at runtime
+*.pdf
+docs
+scripts
+
+# ---- data/ : ship only the runtime artifacts --------------------------------
+# data/cache = trained models + scaler + processed_data.npz + metrics (~340 MB)
+# but NOT the local development database (it contains your local users!).
+data/cache/app.db
+data/cache/app.db-*
+data/cache/*.db
+data/cache/*.sqlite*
+
+# data/raw = 52 GB of CIC-IDS2017 CSV/PCAP — keep ONLY the tiny Quick Lab captures.
+data/raw/**
+!data/raw/lab/
+!data/raw/lab/manifest.json
+!data/raw/lab/captures/
+!data/raw/lab/captures/**

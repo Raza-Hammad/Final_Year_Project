@@ -41,6 +41,7 @@ from app.config import settings
 from app.db import engine, Alert
 from app.ml.cascade import get_detector
 from app.ml.metadata_helper import get_raw_flow_metadata
+from app.simulator.replay import ReplayMixin, SAFETY_BANNER
 from app.ws_manager import broadcast_detection
 
 logger = logging.getLogger(__name__)
@@ -50,9 +51,14 @@ logger = logging.getLogger(__name__)
 # also consumed by main.py's /api/simulate/start request validation.
 LEGACY_SCENARIO_ALIASES = {"ddos_storm": "ddos"}
 
-# Sane ceiling on simulated packets/sec. The UI only ever offers up to 30, but this
-# guards the endpoint against a caller passing an extreme value that would make
-# `interval = 1.0 / rate` collapse toward a busy-loop.
+# Honest throughput messaging (Phase 0 / Phase 5) — keep in sync with
+# ``app.ml.cascade.SINGLE_FLOW_THROUGHPUT_FPS`` / ``BATCH_THROUGHPUT_FPS``.
+# - Single-flow ``detect`` ~44 flows/s; vectorized ``detect_batch`` (PCAP) ~120+/s.
+# CSV / Live Replay still pace one flow per tick, so UI presets stay near 44.
+# MAX_SIMULATION_RATE only rejects abusive API rates (busy-loop guard), not a
+# claim that inference sustains 500/s.
+HONEST_SINGLE_FLOW_FPS = 44
+HONEST_BATCH_FLOW_FPS = 120
 MAX_SIMULATION_RATE = 500
 
 # Global scenario registry mapped to dataset labels
@@ -119,20 +125,25 @@ SCENARIOS = {
     }
 }
 
-class SimulationEngine:
-    """Safely simulates network traffic threat streams by replaying CIC-IDS2017 test dataset rows."""
+class SimulationEngine(ReplayMixin):
+    """Safely simulates network traffic threat streams by replaying CIC-IDS2017 test dataset rows.
+
+    Mode mutex: CSV streaming (``start``) and isolated PCAP Live Replay
+    (``start_replay``) share ``is_running`` — only one may run at a time.
+    """
+
     def __init__(self):
         self.is_running = False
         self.current_scenario = None
         self.packets_sent = 0
         self.attacks_detected = 0
         self.tier_breakdown = {1: 0, 2: 0, 3: 0}
-        self.rate = 1  # packets per second
+        self.rate = 1  # packets / flows per second
         self.duration_seconds = None
         self.start_time = None
-        
+
         self.task = None
-        
+
         # Test dataset arrays & metadata
         self.X_test = None
         self.y_test = None
@@ -143,6 +154,8 @@ class SimulationEngine:
         self.scaler = None
         self.classes = None
         self.is_initialized = False
+
+        self._init_replay_state()
 
     def initialize(self):
         """Pre-loads and maps row indices of the prepared test dataset by target label."""
@@ -203,10 +216,10 @@ class SimulationEngine:
             raise e
 
     def start(self, scenario: str, rate: int, duration_seconds: int = None):
-        """Starts the simulator streaming task in the background."""
+        """Starts the CSV simulator streaming task in the background."""
         if not self.is_initialized:
             self.initialize()
-            
+
         if self.is_running:
             raise ValueError("Simulation is already running. Stop it first.")
 
@@ -217,50 +230,89 @@ class SimulationEngine:
 
         if rate > MAX_SIMULATION_RATE:
             raise ValueError(f"Simulation rate cannot exceed {MAX_SIMULATION_RATE} packets/sec.")
-            
+
         source_indices = self.scenarios.get(scenario, np.array([]))
         if len(source_indices) == 0:
             raise ValueError(f"No test data found for scenario: {scenario}. Re-run the data pipeline.")
-            
+
         self.is_running = True
+        self.mode = "csv"
         self.current_scenario = scenario
+        self.replay_source = None
+        self.packets_parsed = 0
+        self.flows_built = 0
+        self.replay_error = None
         self.rate = rate
         self.duration_seconds = duration_seconds
         self.packets_sent = 0
         self.attacks_detected = 0
         self.tier_breakdown = {1: 0, 2: 0, 3: 0}
         self.start_time = datetime.utcnow()
-        
-        logger.info(f"Launching background simulation task. Scenario: {scenario}, Rate: {rate} packets/sec, Duration: {duration_seconds}s")
+
+        logger.info(
+            "Launching CSV simulation task. Scenario: %s, Rate: %s packets/sec, Duration: %ss",
+            scenario,
+            rate,
+            duration_seconds,
+        )
         self.task = asyncio.create_task(self._runner())
 
     def stop(self):
-        """Stops the active streaming background task."""
+        """Stops the active CSV or replay background task."""
         if not self.is_running:
             return
-            
-        logger.info("Cancelling simulation background worker task...")
+
+        logger.info("Cancelling simulation/replay background worker (mode=%s)...", self.mode)
         self.is_running = False
         if self.task:
             self.task.cancel()
             self.task = None
-        logger.info("Simulation background task cleanly stopped.")
+        self.mode = "idle"
+        logger.info("Simulation/replay background task cleanly stopped.")
 
     def get_status(self) -> dict:
-        """Returns active simulator telemetry and counters."""
+        """Returns active simulator telemetry, distinguishing CSV vs replay mode."""
         elapsed = 0
         if self.is_running and self.start_time:
             elapsed = (datetime.utcnow() - self.start_time).total_seconds()
-            
+
+        mode = self.mode if self.is_running else "idle"
+        source = None
+        if mode == "replay":
+            source = self.replay_source
+        elif mode == "csv":
+            source = self.current_scenario
+        elif self.replay_source and self.packets_sent > 0 and self.current_scenario == "isolated_replay":
+            # Last completed replay — keep source visible for the status panel.
+            source = self.replay_source
+        elif self.current_scenario:
+            source = self.current_scenario
+
         return {
             "running": self.is_running,
+            "mode": mode,
+            "source": source,
             "scenario": self.current_scenario,
             "rate": self.rate,
             "duration_seconds": self.duration_seconds,
             "elapsed_seconds": int(elapsed),
             "packets_sent": self.packets_sent,
+            "packets_parsed": self.packets_parsed,
+            "flows_built": self.flows_built,
             "attacks_detected": self.attacks_detected,
-            "tier_breakdown": self.tier_breakdown
+            "tier_breakdown": self.tier_breakdown,
+            "replay_error": self.replay_error,
+            "safety_banner": SAFETY_BANNER,
+            "throughput": {
+                "single_flow_fps": HONEST_SINGLE_FLOW_FPS,
+                "batch_flow_fps": HONEST_BATCH_FLOW_FPS,
+                "api_max_rate": MAX_SIMULATION_RATE,
+                "note": (
+                    "CSV/replay pace one flow per tick (~single_flow_fps). "
+                    "PCAP analyze uses detect_batch (~batch_flow_fps). "
+                    "api_max_rate is a busy-loop guard, not sustained inference."
+                ),
+            },
         }
 
     async def _runner(self):
@@ -268,6 +320,9 @@ class SimulationEngine:
         try:
             detector = get_detector()
             interval = 1.0 / self.rate
+            loop = asyncio.get_running_loop()
+            t0 = loop.time()
+            emitted = 0
             
             # Local copies for iteration of low-sample count scenarios
             low_sample_indices = None
@@ -368,8 +423,18 @@ class SimulationEngine:
                         logger.info(f"Simulation completed. Duration limit of {self.duration_seconds}s reached.")
                         self.is_running = False
                         break
-                        
-                await asyncio.sleep(interval)
+
+                # Deadline pacing: tick i is due at t0 + i * interval, so the
+                # per-flow cascade/DB/WS cost does not stretch the rate.
+                emitted += 1
+                due = t0 + emitted * interval
+                now = loop.time()
+                if due > now:
+                    await asyncio.sleep(due - now)
+                else:
+                    if now - due > 1.0:
+                        t0 = now - emitted * interval  # cascade-bound: re-anchor
+                    await asyncio.sleep(0)
                 
         except asyncio.CancelledError:
             logger.info("Simulation runner loop cancelled.")
@@ -377,6 +442,7 @@ class SimulationEngine:
             logger.error(f"Critical error in simulator streaming loop: {e}")
         finally:
             self.is_running = False
+            self.mode = "idle"
 
 # Global singleton instance
 simulator_engine = SimulationEngine()

@@ -21,7 +21,7 @@
 
 import React from 'react';
 
-export type NavIconType = 'live' | 'simulator' | 'history' | 'insights' | 'ai';
+export type NavIconType = 'live' | 'simulator' | 'lab' | 'history' | 'insights' | 'ai' | 'reviews';
 
 interface NavIconProps {
   type: NavIconType;
@@ -42,6 +42,20 @@ const PATHS: Record<NavIconType, React.ReactNode> = {
       <circle cx="12" cy="12" r="7.5" />
       <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
       <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+    </>
+  ),
+  lab: (
+    <>
+      <path d="M9.5 3.5h5M10.5 3.5v5.2L5.2 17.6A2 2 0 0 0 6.9 20.5h10.2a2 2 0 0 0 1.7-2.9L13.5 8.7V3.5" />
+      <path d="M8.2 14.5h7.6" />
+      <circle cx="10.5" cy="17" r=".9" fill="currentColor" stroke="none" />
+      <circle cx="13.7" cy="16.2" r=".7" fill="currentColor" stroke="none" />
+    </>
+  ),
+  reviews: (
+    <>
+      <path d="M5 18.5v-2M9 18.5v-5M13 18.5v-8M17 18.5v-11" />
+      <path d="M3.5 20.5h17" />
     </>
   ),
   history: (

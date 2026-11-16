@@ -65,13 +65,20 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
       bg: 'rgba(12, 163, 12, 0.08)',
       dot: 'bg-[var(--sr-sev-info)] animate-pulse'
     };
-  } else if (statusUpper === 'GEMINI' || statusUpper === 'AI GEMINI') {
+  } else if (
+    statusUpper === 'AI' ||
+    statusUpper === 'AI AVAILABLE' ||
+    statusUpper === 'NEBIUS' ||
+    statusUpper === 'AI NEBIUS' ||
+    statusUpper === 'GEMINI' ||
+    statusUpper === 'AI GEMINI'
+  ) {
     badgeStyle = {
       color: 'var(--sr-accent)',
       bg: 'var(--sr-accent-soft)',
       dot: 'bg-[var(--sr-accent)] animate-pulse'
     };
-  } else if (statusUpper === 'RULE-BASED' || statusUpper === 'RULE') {
+  } else if (statusUpper === 'RULE-BASED' || statusUpper === 'RULE' || statusUpper === 'AI OFFLINE') {
     badgeStyle = {
       color: 'var(--sr-cat-3)',
       bg: 'rgba(27, 175, 122, 0.10)',

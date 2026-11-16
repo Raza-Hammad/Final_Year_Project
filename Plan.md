@@ -13,6 +13,7 @@
 ## SCOPE GUARDRAILS (do not cross these — they are in the approved proposal)
 - This is DETECTION + ANALYSIS + AWARENESS. It does NOT auto-block attacks (no active defense).
 - Attacks are produced by REPLAYING recorded traffic, NOT by running live attack tools against live systems.
+- Update (Attack Lab): the app now has two tracks. Quick Lab streams a captured lab session. Live Lab classifies real VM-to-VM traffic that the user generates inside their own isolated VirtualBox Internal Network; Cascadyx itself still never launches attack tools. Live Lab needs supervisor sign-off and must never be bridged to a real network.
   Live penetration testing is explicitly OUT of scope.
 - Network-level threats only (TCP/IP enterprise "General IT" scope). Not IoT-specific, not application-layer pentest.
 

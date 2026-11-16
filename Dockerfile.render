@@ -1,0 +1,60 @@
+# Cascadyx — FREE-tier image (Render free web service / Hugging Face Spaces Docker).
+# Built from GitHub: it uses ONLY files that are committed to git. The trained models
+# live in the slim bundle `deploy/data/` (~23 MB, see scripts/build_deploy_bundle.py)
+# instead of the gitignored 340 MB `data/` folder used by the Fly.io `Dockerfile`.
+#
+# Layout inside the image (matches the paths the backend computes from __file__):
+#   /app/backend/            FastAPI app
+#   /app/frontend/dist/      Vite production UI (built in stage 1)
+#   /app/data/cache/         models, scaler, slim processed_data.npz, metrics
+#   /app/data/raw/           Quick Lab / replay captures
+#   /app/data/cache/app.db   SQLite — EPHEMERAL on free tiers (see docs/GO_LIVE.md)
+
+# ---- 1) Build the React UI ---------------------------------------------------
+FROM node:22-slim AS ui
+WORKDIR /ui
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ---- 2) Runtime ----------------------------------------------------------------
+# Python/ML pins must match the versions that pickled the models
+# (backend/constraints-deploy.txt). Do not bump casually.
+FROM python:3.14-slim AS app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PUBLIC_MODE=1 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1
+
+# libgomp1: OpenMP runtime required by lightgbm / xgboost wheels.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 app
+
+WORKDIR /app
+
+COPY backend/requirements.txt backend/constraints-deploy.txt backend/
+RUN pip install -r backend/requirements.txt -c backend/constraints-deploy.txt
+
+COPY backend/ backend/
+COPY deploy/data/ data/
+COPY --from=ui /ui/dist frontend/dist
+
+# The app writes the SQLite DB next to the models; the non-root user must own it.
+RUN chown -R app:app /app/data
+USER app
+
+WORKDIR /app/backend
+
+# Render injects $PORT (default 10000). Hugging Face Spaces: set PORT=7860 as a Variable.
+EXPOSE 10000
+
+# One worker on purpose: SQLite + in-process WebSocket manager + single simulator engine.
+# --proxy-headers / --forwarded-allow-ips: trust the platform proxy's X-Forwarded-For so
+# slowapi rate limits (login 5/min!) are per real client, not one shared proxy IP.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips '*'"]
