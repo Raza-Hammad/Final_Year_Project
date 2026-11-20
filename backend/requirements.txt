@@ -11,6 +11,8 @@ sqlmodel>=0.0.16
 # Pin <2.1: SQLAlchemy 2.1 ships cython wheels that Windows Application Control
 # (AppLocker/WDAC) can block on locked-down hosts ("DLL load failed ... _util_cy").
 sqlalchemy>=2.0.16,<2.1
+# PostgreSQL driver (Neon). Used only when DATABASE_URL is postgresql://...; SQLite needs nothing.
+psycopg[binary]>=3.2,<4
 passlib[bcrypt]>=1.7.4
 bcrypt==4.0.1  # passlib 1.7.4's backend detection breaks on bcrypt>=4.1 (unmaintained upstream)
 python-jose[cryptography]>=3.3.0
