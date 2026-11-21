@@ -13,6 +13,8 @@ import CursorSpotlight from '../components/ui/CursorSpotlight';
 import Logomark from '../components/ui/Logomark';
 import { Lock, User, RefreshCw, AlertCircle, Eye, EyeOff, Play } from 'lucide-react';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import TourLattice from '../components/tour/TourLattice';
+import { openTour } from '../components/tour/tourEvents';
 
 declare global {
   interface Window {
@@ -583,6 +585,37 @@ export const Login: React.FC = () => {
         </div>
 
         <div className="relative z-10 space-y-4 pt-6">
+          <button
+            type="button"
+            onClick={openTour}
+            aria-label="Watch the Cascadyx project tour video"
+            className="group relative flex w-full max-w-sm cursor-pointer items-center gap-4 overflow-hidden rounded-[var(--sr-radius-md)] border border-[#2DD4BF]/30 bg-[#06161c] p-3.5 pr-5 text-left outline-none shadow-[0_18px_44px_-18px_rgba(15,159,142,0.55)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[#2DD4BF]/70 focus-visible:ring-2 focus-visible:ring-[#2DD4BF] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sr-bg-page)]"
+          >
+            <TourLattice
+              className="absolute inset-0 h-full w-full opacity-60 transition-opacity duration-300 group-hover:opacity-100"
+              animate={!reducedMotion}
+            />
+            <span
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(90deg, rgba(6,22,28,0.35), rgba(6,22,28,0.88) 70%)' }}
+              aria-hidden="true"
+            />
+            <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#2DD4BF] to-[#0F9F8E] text-[#04141A] shadow-[0_0_28px_rgba(45,212,191,0.55)] transition-transform duration-300 group-hover:scale-110">
+              <Play className="ml-0.5 h-5 w-5 fill-current" />
+            </span>
+            <span className="relative min-w-0">
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-[#2DD4BF]">
+                Project tour
+              </span>
+              <span
+                className="block text-base font-bold leading-tight text-white"
+                style={{ fontFamily: 'var(--sr-font-brand)' }}
+              >
+                Watch the Cascadyx tour
+              </span>
+              <span className="block text-[11px] text-slate-400">Intro · live demo · team &amp; supervisor credits</span>
+            </span>
+          </button>
           <div className="flex items-center gap-2.5 text-xs text-[var(--sr-text-muted)]">
             <span
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${

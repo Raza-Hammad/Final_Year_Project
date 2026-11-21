@@ -16,6 +16,10 @@ WORKDIR /ui
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# Optional: external URL of the Project Tour video (YouTube / Drive / Vimeo / direct .mp4).
+# Render passes service env vars as build args. Alternative: edit frontend/public/tour-config.json.
+ARG VITE_TOUR_VIDEO_URL=""
+ENV VITE_TOUR_VIDEO_URL=${VITE_TOUR_VIDEO_URL}
 RUN npm run build
 
 # ---- 2) Runtime ----------------------------------------------------------------

@@ -14,7 +14,9 @@ import {
   Sun,
   Moon,
   Crosshair,
+  Play,
 } from 'lucide-react';
+import { openTour } from '../tour/tourEvents';
 import { AnimatePresence } from 'framer-motion';
 import GlowButton from '../ui/GlowButton';
 import StatusBadge from '../ui/StatusBadge';
@@ -222,6 +224,27 @@ export const AppShell: React.FC<AppShellChromeProps> = ({
                 })}
               </div>
             ))}
+            <div className="flex flex-col gap-1">
+              {!sidebarCollapsed && (
+                <span className="px-3 pb-0.5 text-[10px] font-semibold tracking-wider text-[var(--sr-text-muted)] uppercase">
+                  Learn
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={openTour}
+                title={sidebarCollapsed ? 'Watch Tour' : undefined}
+                aria-label="Watch the Cascadyx project tour"
+                className={`group flex items-center gap-2.5 py-1.5 rounded-[var(--sr-radius-sm)] text-sm font-medium text-[var(--sr-text-secondary)] transition-all cursor-pointer outline-none border-l-[3px] border-transparent hover:bg-[rgba(15,159,142,0.1)] hover:text-[var(--sr-text-primary)] focus-visible:ring-2 focus-visible:ring-[#2DD4BF] ${
+                  sidebarCollapsed ? 'justify-center pl-1 pr-1' : 'pl-2.5 pr-2'
+                }`}
+              >
+                <span className="flex h-6.5 w-6.5 items-center justify-center rounded-full shrink-0 bg-gradient-to-br from-[#2DD4BF] to-[#0F9F8E] text-[#04141A]">
+                  <Play className="ml-px h-3 w-3 fill-current" />
+                </span>
+                {!sidebarCollapsed && <span className="flex-1 text-left truncate">Watch Tour</span>}
+              </button>
+            </div>
           </nav>
         </div>
 

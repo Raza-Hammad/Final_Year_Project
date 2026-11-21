@@ -146,6 +146,24 @@ changes** — deliberately out of scope.
 
 ---
 
+## Project tour video (external host)
+
+The "Cascadyx Project Tour" video (Login → *Watch the Cascadyx tour*, sidebar → *Watch Tour*, and the
+public `/tour` page) is far too large (hundreds of MB) for the Render free image or GitHub's 100 MB
+limit, so it is **streamed from an external host**. Upload it once, then point the app at the link:
+
+1. Upload the file as **YouTube → Unlisted** (recommended), Google Drive (*Anyone with the link*), or Vimeo.
+2. Put the share link in **either**:
+   - `frontend/public/tour-config.json` → `"videoUrl": "<link>"` then commit + push (no env var needed), **or**
+   - Render → Environment → `VITE_TOUR_VIDEO_URL=<link>` then redeploy (read at build time).
+3. Optional: `"chapters": [{ "label": "Demo", "at": 95 }]` adds seek-bar markers (direct `.mp4` URLs only).
+
+A direct `.mp4` URL (e.g. Cloudflare R2 public bucket) gets the full custom player; YouTube/Drive/Vimeo
+use the same branded poster, then the provider's own player. Files under ~40 MB can instead be placed at
+`frontend/public/media/cascadyx-tour.mp4` (served from the app itself; `*.mp4` there is git-ignored by default).
+
+---
+
 ## Appendix A — Other FREE alternatives (more setup / less suitable)
 
 | Option | Free? | Notes |

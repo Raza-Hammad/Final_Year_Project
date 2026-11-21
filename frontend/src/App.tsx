@@ -15,12 +15,15 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/toast/ToastProvider';
 import DesktopGate from './components/DesktopGate';
 import BrandSplash from './components/BrandSplash';
+import { OPEN_TOUR_EVENT } from './components/tour/tourEvents';
 
 const INTRO_SEEN_KEY = 'cx-intro-seen-v2';
 
 const Login = lazy(() => import('./pages/Login'));
 const DesignSystemDemo = lazy(() => import('./pages/DesignSystemDemo'));
 const Intro = lazy(() => import('./pages/Intro'));
+const TourPage = lazy(() => import('./pages/TourPage'));
+const TourModal = lazy(() => import('./components/tour/TourModal'));
 const DashboardLayout = lazy(() => import('./dashboard/DashboardLayout'));
 const LiveDetectionPage = lazy(() => import('./pages/LiveDetectionPage'));
 const SimulatorPage = lazy(() => import('./pages/SimulatorPage'));
@@ -65,6 +68,8 @@ function markIntroSeen(): void {
 }
 
 function initialIntroMode(): IntroMode {
+  // A shared /tour link goes straight to the video — no intro in the way.
+  if (window.location.pathname === '/tour') return null;
   const forced = new URLSearchParams(window.location.search).get('intro') === '1';
   if (forced) return 'full';
   return readIntroSeen() ? 'splash' : 'full';
@@ -76,6 +81,13 @@ function AppRoutes() {
   const [introMode, setIntroMode] = useState<IntroMode>(initialIntroMode);
   /** True when the intro was replayed on top of an already-rendered route tree. */
   const [overlay, setOverlay] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenTour = () => setTourOpen(true);
+    window.addEventListener(OPEN_TOUR_EVENT, handleOpenTour);
+    return () => window.removeEventListener(OPEN_TOUR_EVENT, handleOpenTour);
+  }, []);
 
   const loggedIn = isAuthenticated || isStoredTokenValid(localStorage.getItem('token'));
 
@@ -117,6 +129,7 @@ function AppRoutes() {
     <>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/tour" element={<TourPage />} />
         <Route path="/design-system" element={<DesignSystemDemo />} />
         <Route
           path="/"
@@ -137,6 +150,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {introMode === 'full' && overlay && <Intro onComplete={finishIntro} ctaLabel={ctaLabel} />}
+      {tourOpen && <TourModal open onClose={() => setTourOpen(false)} />}
     </>
   );
 }

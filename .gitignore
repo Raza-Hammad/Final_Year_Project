@@ -56,3 +56,7 @@ backend/env
 .cascadyx_servers.json
 .pytest_cache/
 .pytest_full_out.txt
+
+# Large tour video lives on an external host (see docs/DEPLOY.md > Project tour video)
+/Video.mp4
+frontend/public/media/*.mp4
