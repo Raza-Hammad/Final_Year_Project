@@ -863,11 +863,6 @@ export const Login: React.FC = () => {
               <Play className="h-3 w-3 fill-current" />
               Watch the intro again
             </button>
-            <p className="text-xs leading-relaxed text-[var(--sr-text-muted)]">
-              {googleEnabled
-                ? 'New here? Continue with Google — we create your analyst account instantly.'
-                : 'Need access? Ask your instructor or administrator to create an account.'}
-            </p>
             {import.meta.env.DEV && (
               <p className="text-[11px] leading-relaxed text-[var(--sr-text-muted)]">
                 Dev build: seeded admin credentials are printed in the server log on first run.
